@@ -3,11 +3,6 @@ import {qrSvg} from './qr.js';
 const KEYS = ['property_name','welcome','wifi_name','wifi_password','checkin','checkout','rules','appliances','parking','local_tips','emergency','contact','additional'];
 const LIMITS = { property_name:80, wifi_name:100, wifi_password:150, welcome:1500, checkin:800, checkout:800, rules:2000, appliances:2000, parking:1000, local_tips:2000, emergency:1000, contact:1000, additional:2000 };
 const DEFAULTS = Object.fromEntries(KEYS.map(k=>[k,'']));
-const SECTIONS = [
-  ['welcome','Welcome','sparkles'],['wifi','Wi-Fi','wifi'],['stay','Check-in & check-out','clock'],
-  ['rules','House rules','shield'],['appliances','How things work','plug'],['parking','Parking & transport','car'],
-  ['local_tips','Local favourites','map'],['emergency','Emergencies','heart'],['contact','Contact your host','phone'],['additional','Good to know','info']
-];
 const esc = v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const paragraph = v=>esc(v).replace(/\r?\n/g,'<br>');
 const random = count=>{let b=new Uint8Array(count);crypto.getRandomValues(b);return [...b].map(x=>x.toString(16).padStart(2,'0')).join('');};
@@ -29,16 +24,51 @@ async function lookup(db,id){return db.prepare('SELECT id, edit_token_hash, cont
 function parseRow(row){return JSON.parse(row.content_json);}
 function authorized(request,row){return request.headers.get('Authorization')?.startsWith('Bearer ');}
 async function checkOwner(request,row){const h=request.headers.get('Authorization')||'';return h.startsWith('Bearer ')&& (await hash(h.slice(7)))===row.edit_token_hash;}
-function section(id,title,body,icon){return `<section class="guest-section" id="${id}"><div class="section-icon" aria-hidden="true">${icon}</div><div><h2>${title}</h2>${body}</div></section>`;}
+// Guest presentation only: all links and content are rendered before JavaScript runs.
+const GUEST_ICONS = {
+  welcome:'<path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5Z"/>',
+  wifi:'<path d="M3 8a15 15 0 0 1 18 0M6 12a10 10 0 0 1 12 0m-9 4a5 5 0 0 1 6 0"/><circle cx="12" cy="20" r=".8"/>',
+  arrival:'<rect x="3" y="5" width="18" height="16" rx="3"/><path d="M7 3v4m10-4v4M3 11h18m-13 5h3"/>',
+  rules:'<path d="m12 3 8 3v6c0 4-4 7-8 9-4-2-8-5-8-9V6Z"/><path d="m8 12 3 3 5-6"/>',
+  appliances:'<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M4 8h16"/><circle cx="12" cy="14" r="4"/>',
+  parking:'<path d="m5 8 2-4h10l2 4m-16 5 2-5h14l2 5v6H3Z"/><path d="M3 13h18M6 19v2m12-2v2"/>',
+  local_tips:'<path d="M19 10c0 5-7 11-7 11S5 15 5 10a7 7 0 0 1 14 0Z"/><circle cx="12" cy="10" r="2.5"/>',
+  emergency:'<path d="M9 3h6v6h6v6h-6v6H9v-6H3V9h6Z"/>',
+  contact:'<path d="M7 3H4a1 1 0 0 0-1 1c0 9 8 17 17 17a1 1 0 0 0 1-1v-3l-5-2-2 2a15 15 0 0 1-7-7l2-2Z"/>',
+  additional:'<circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10h.01"/>'
+};
+const guestIcon=id=>`<svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true" focusable="false">${GUEST_ICONS[id]}</svg>`;
+const hasText=value=>typeof value==='string'&&value.trim().length>0;
 function guestPage(id,model){
-  const title=esc(model.property_name),s=[];
-  if(model.wifi_name||model.wifi_password){s.push(section('wifi','Wi-Fi',`<div class="wifi-data"><div><small>Network</small><strong>${esc(model.wifi_name||'—')}</strong></div>${model.wifi_password?`<div><small>Password</small><div class="password-wrap"><input id="wifi-password" aria-label="Wi-Fi password" value="${esc(model.wifi_password)}" readonly><button type="button" class="copy-btn" data-copy="wifi-password">Copy</button></div></div>`:''}</div>`,'⌁'));}
-  if(model.welcome)s.push(section('welcome','Welcome',`<p>${paragraph(model.welcome)}</p>`,'✳'));
-  if(model.checkin||model.checkout)s.push(section('arrival','Arrival & departure',`<div class="hours-grid">${model.checkin?`<div><small>Check-in</small><p>${paragraph(model.checkin)}</p></div>`:''}${model.checkout?`<div><small>Check-out</small><p>${paragraph(model.checkout)}</p></div>`:''}</div>`,'◷'));
-  for(const [key,label,icon] of [['rules','House rules','⌂'],['appliances','How things work','⚙'],['parking','Parking & transport','↗'],['local_tips','Local favourites','♡'],['emergency','Emergency information','✚'],['contact','Contact your host','✉'],['additional','Good to know','◎']]){
-    if(model[key])s.push(section(key,label,`<p>${paragraph(model[key])}</p>`,icon));
+  const title=esc(model.property_name),sections=[];
+  const add=(id,title,body)=>sections.push({id,title,body});
+  if(hasText(model.wifi_name)||hasText(model.wifi_password)){
+    add('wifi','Wi-Fi',`<dl class="wifi-data">
+      ${hasText(model.wifi_name)?`<div><dt>Network</dt><dd>${esc(model.wifi_name)}</dd></div>`:''}
+      ${hasText(model.wifi_password)?`<div><dt>Password</dt><dd><code id="wifi-password" tabindex="0">${esc(model.wifi_password)}</code></dd></div>`:''}
+    </dl>${hasText(model.wifi_password)?`<div class="wifi-copy"><button type="button" class="copy-btn" data-copy="wifi-password" aria-describedby="wifi-copy-status" hidden>Copy password</button><p id="wifi-copy-status" class="copy-status" role="status" aria-live="polite"></p></div>`:''}`);
   }
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><meta name="theme-color" content="#f6f8f6"><title>${title} · StayGuide</title><link rel="stylesheet" href="/styles.css"></head><body class="guest-body"><main class="guest-shell"><header class="guest-head"><span class="eyebrow">YOUR STAY, MADE SIMPLE</span><h1>${title}</h1><p>Everything you need for a comfortable stay, all in one place.</p></header>${s.length?`<nav class="quick-nav" aria-label="Guide sections">${s.map((part,i)=>{const match=part.match(/id="([^"]+)"/);const h=part.match(/<h2>(.*?)<\/h2>/);return `<a href="#${match[1]}">${h[1]}</a>`;}).join('')}</nav><div class="guest-content">${s.join('')}</div>`:'<p class="empty-guide">Your host is preparing this guide.</p>'}<footer class="guest-foot">Enjoy your stay</footer></main><script src="/guest.js" defer></script></body></html>`;
+  if(hasText(model.checkin)||hasText(model.checkout)){
+    add('arrival','Check-in & check-out',`<div class="hours-grid">
+      ${hasText(model.checkin)?`<div><h3>Check-in</h3><p>${paragraph(model.checkin)}</p></div>`:''}
+      ${hasText(model.checkout)?`<div><h3>Check-out</h3><p>${paragraph(model.checkout)}</p></div>`:''}
+    </div>`);
+  }
+  if(hasText(model.welcome))add('welcome','Welcome',`<p>${paragraph(model.welcome)}</p>`);
+  for(const [key,label] of [['rules','House rules'],['appliances','How things work'],['parking','Parking & transport'],['local_tips','Local favourites'],['emergency','Emergency information'],['contact','Contact your host'],['additional','Good to know']]){
+    if(hasText(model[key]))add(key,label,`<p>${paragraph(model[key])}</p>`);
+  }
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><meta name="theme-color" content="#f8f7f4"><title>${title} · StayGuide</title><link rel="stylesheet" href="/guest.css"></head>
+<body class="guest-body"><main class="guest-shell" id="guide-top">
+  <header class="guest-head"><span class="guest-eyebrow">A LITTLE GUIDE TO YOUR STAY</span><h1>${title}</h1><p>Settle in. Make yourself at home.</p></header>
+  ${sections.length?`<div class="guest-layout">
+    <nav class="quick-nav" aria-labelledby="guide-nav-title"><h2 id="guide-nav-title">Your stay, at a glance</h2><div class="guest-tiles">
+      ${sections.map(({id,title})=>`<a class="guest-tile${id==='wifi'?' guest-tile-wifi':''}" href="#${id}">${guestIcon(id)}<span>${title}</span></a>`).join('')}
+    </div></nav>
+    <div class="guest-content">${sections.map(({id,title,body})=>`<section class="guest-section" id="${id}" aria-labelledby="${id}-title" tabindex="-1"><header class="guest-section-head"><span class="section-icon">${guestIcon(id)}</span><h2 id="${id}-title">${title}</h2></header>${body}<a class="back-to-guide" href="#guide-top">Back to sections <span aria-hidden="true">↑</span></a></section>`).join('')}</div>
+  </div>`:`<section class="empty-guide" aria-labelledby="empty-guide-title"><span class="section-icon">${guestIcon('welcome')}</span><h2 id="empty-guide-title">A warm welcome awaits.</h2><p>Your host is preparing this guide. Check back for the details of your stay.</p></section>`}
+  <footer class="guest-foot">Enjoy your stay.</footer>
+</main><script src="/guest.js" defer></script></body></html>`;
 }
 function qrCard(id,model){const name=esc(model.property_name);return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>QR card · ${name}</title><link rel="stylesheet" href="/styles.css"></head><body class="print-body"><main class="print-card"><span class="eyebrow">WELCOME TO</span><h1>${name}</h1><p>Everything for your stay in one place.</p><img src="/g/${id}/qr.svg" width="220" height="220" alt="QR code for your guest guide"><p class="scan-text">Scan for Wi-Fi, house information & local tips</p></main><p class="print-help">Print using your browser · Save as PDF or print on paper</p></body></html>`;}
 export async function handleRequest(request,env){

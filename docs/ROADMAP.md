@@ -2,11 +2,11 @@
 
 ## Where we are now
 
-StayGuide remains a local prototype, not production-ready. SG-P11 was approved, committed and pushed as `91d59fced91150b347451df2ddfd22584b77387e`. SG-P12 implementation and validation are **DONE, pending owner review**: the section editor now has modal focus handling, guarded draft dismissal, inline save errors and a responsive scrolling panel. No production deployment is authorized.
+StayGuide remains a local prototype, not production-ready. SG-P12 was owner-approved, committed and pushed as `3b8981a7483eb155243740c5d642d822fdb6ad0c`. SG-P20 implementation and validation are **DONE, pending owner visual review**: the public guide has a compact warm header, two-column mobile section tiles, readable saved content and accessible Wi-Fi copying. No production deployment is authorized.
 
-Current task: **SG-P12 — Premium Accessible Section Editor & Mobile Panel**. Next step: owner review of the editor and screenshots. Next recommended implementation task: **SG-P20 — warm SSR guest layout**, only with explicit authorization.
+Current task: **SG-P20 — Premium Mobile Guest Guide Redesign**. Next step: owner review of the guest interface and screenshots. Next recommended implementation task: **SG-P21 — print/QR screen and exports**, only with explicit authorization.
 
-SG-P12 began on clean `main` at `91d59fc`. Its seven changed files remain uncommitted; no commit, push or deployment was performed. SG-SHARE01 helpers, configuration, processes and port 8787 were left untouched; browser validation used a separate ephemeral local server and in-memory test guides. See [PROGRESS.md](PROGRESS.md) for evidence and limitations.
+SG-P20 began on clean `main` at `3b8981a`. Its changes remain uncommitted; no commit, push or deployment was performed. SG-SHARE01 helpers, configuration, processes and port 8787 were left untouched; browser validation used an isolated ephemeral local server and in-memory test guides. See [PROGRESS.md](PROGRESS.md) for evidence and limitations.
 
 ## Mission and non-negotiable principles
 
@@ -43,9 +43,10 @@ Evidence is recorded in [PROGRESS.md](PROGRESS.md); historical audit and user ma
 | SG-P01 — host state reliability | DONE | 27 host regressions and 8 existing worker tests passed by direct execution; `npm test` passed with 2 file-level passes. Real Chrome/in-memory Worker smoke passed create/edit, delayed success/error switching, correct owner association, guest/QR and recovery-copy checks. Screenshots at 1440px/390px and recovery at 320px; no page overflow in tested views. Approved by the user and checkpointed/pushed as `46763c6`; no deployment. |
 | SG-P10 — warm host shell and tokens | DONE | Owner approved the foundation and final mobile selector polish; all original 35 named tests and browser checks passed before the authorized checkpoint. Committed/pushed as `50cc34e`; no production deployment. |
 | SG-P11 — property identity, cards, progress and actions | DONE | Initials placeholders, all ten cards, explicit empty/started/complete criteria and one quick-action group. 42 host regressions plus 8 worker tests pass; Chrome verifies saved progress after UI saves/reloads/switches, pending/stale states, correct URLs, keyboard/scrolling, long/many names and 1440px/390px/320px layouts. Owner approved and checkpointed/pushed as `91d59fc`. |
-| SG-P12 — accessible section editor | DONE | Native modal drawer/full-screen mobile panel, exact draft comparison, explicit discard, duplicate-save guard, inline retry and retained property/request guards. 47 host tests plus 8 worker tests pass; Chrome checks all ten editors, focus/keyboard/dismissal, failure/retry, slow/stale saves, responsive layouts and existing flows. Owner review pending. |
+| SG-P12 — accessible section editor | DONE | Native modal drawer/full-screen mobile panel, exact draft comparison, explicit discard, duplicate-save guard, inline retry and retained property/request guards. 47 host tests plus 8 worker tests pass; Chrome checks all ten editors, focus/keyboard/dismissal, failure/retry, slow/stale saves, responsive layouts and existing flows. Owner approved and checkpointed/pushed as `3b8981a`. |
+| SG-P20 — premium mobile guest guide | DONE | Guest-only CSS, SSR tiles/sections, empty-guide state and enhanced Wi-Fi copy/fallback. 12 new guest tests, 47 host tests and 8 worker tests pass. Chrome checks all saved values with JS disabled, native anchors, clipboard success/failure/absence, long/injected/sparse content and 1440px/390px/320px layouts. Owner visual review pending. |
 
-Latest automated baseline, rerun during SG-P12: **55 named tests pass** (47 host regressions and 8 worker tests). `npm test` reports 2 passing test files in this environment; direct execution confirms the named counts. Chrome verifies the new editor at 1440px/390px/320px and a reduced-height viewport, plus creation/switching, saved progress, sharing, guest/no-JS, QR download/print routing and recovery. Guest/mobile, marketing/desktop/mobile and print captures match the committed shared CSS. Real phone keyboards, other browser engines, assistive technology, physical QR scanning/printing and production readiness are not verified.
+Latest automated baseline, rerun during SG-P20: **67 named tests pass** (12 guest regressions, 47 host regressions and 8 worker tests). `npm test` reports 3 passing test files in this environment; direct execution confirms the named counts. The complete Chrome suite passes guest SSR/no-JS navigation/copy/responsiveness, existing host creation/editing/switching/recovery, native QR download and print routing. Marketing desktop/mobile and print-media captures match committed shared CSS; host/shared CSS, API contracts, security helpers, QR/card renderer and route handling are unchanged. Real mobile devices, other engines, screen readers, physical QR scanning/printing and production readiness remain unverified.
 
 ## Phases, tasks and dependencies
 
@@ -57,9 +58,9 @@ Latest automated baseline, rerun during SG-P12: **55 named tests pass** (47 host
 | P0 | SG-P01 | DONE | Approved host-state reliability scope implemented: validated saved state with explicit recovery-copy reset, guarded loads/saves and focused regressions. Evidence above; approved and checkpointed as `46763c6`. |
 | P1 — Warm host UI | SG-P10 | DONE | Approved responsive host shell and mobile selector polish; checkpointed/pushed as `50cc34e`. |
 | P1 | SG-P11 | DONE | Approved identity/card/progress/action scope implemented using existing saved data. Empty/started/complete criteria explained; loading/stale states protected. Evidence above; approved/checkpointed as `91d59fc`. |
-| P1 | SG-P12 | DONE | Accessible editing drawer/mobile panel, dirty confirmation, inline retry, focus and safe async saves verified; pending owner review. |
-| P2 — Guest UI and print | SG-P20 | NEXT | Warm SSR guest layout; retain current guide model and non-JS reading. Confirm sequencing after baseline fixes. |
-| P2 | SG-P21 | PLANNED | Print/QR screen and PNG/SVG exports; preserve stable guest URLs and prove QR decoding. Coordinate with SG-P20. |
+| P1 | SG-P12 | DONE | Accessible editing drawer/mobile panel, dirty confirmation, inline retry, focus and safe async saves verified; owner-approved and checkpointed as `3b8981a`. |
+| P2 — Guest UI and print | SG-P20 | DONE | Warm SSR guest layout and real section anchors; existing model, security headers and non-JS reading preserved. Verified; owner visual review pending. |
+| P2 | SG-P21 | NEXT | Print/QR screen and PNG/SVG exports; preserve stable guest URLs and prove QR decoding. Coordinate with SG-P20. |
 | P2 | SG-P22 | PLANNED | A4/A5 welcome-book PDF from shared data; PDF approach remains open (D-013), with pagination/font verification required. Coordinate with SG-P20/SG-P21. |
 | P3 — Feature completeness | SG-P30 | PLANNED | Photos and validated size variants; storage/photo policy decisions D-008/D-013 required before implementation choices. |
 | P3 | SG-P31 | PLANNED | Multilingual architecture/cost comparison; research can precede decision D-009, implementation cannot. |
@@ -93,8 +94,8 @@ These summarize the existing task acceptance criteria; they do not replace detai
 - **Public content privacy:** editor currently lacks explicit safeguards against private entry information; escaping is not confidentiality protection.
 - **Open decisions:** D-008–D-013 cover architecture/storage, translation cost/quotas, payment/tax viability, authentication/trial policy, name/domain conflict, PDF/photo policy and provisional discounts. No provider, purchase or architecture change is approved by this roadmap.
 - **Verification gaps:** no real Cloudflare/D1 smoke test, measured field performance, QR decoding, physical print verification or comprehensive accessibility/security review. User-confirmed local flows do not close these gates.
-- **Visual completeness:** SG-P11 supplies initials-based visual identities, enhanced cards, saved-field progress and quick actions on the SG-P10 shell. Real photos/storage remain SG-P30, the SG-P12 editor is implemented pending review; guest tiles/languages and the print workspace remain later tasks. Initials are placeholders, not actual photography. No reference parity is claimed.
-- **Repository review:** SG-P11 is approved and checkpointed/pushed as `91d59fc`. SG-P12 awaits owner review and remains uncommitted. No new commit or push is authorized by SG-P12.
+- **Visual completeness:** SG-P11 supplies initials-based visual identities, enhanced cards, saved-field progress and quick actions on the SG-P10 shell. Real photos/storage remain SG-P30, SG-P12 is approved and SG-P20 supplies the guest tiles/readable content; languages and the print workspace remain later tasks. Initials are placeholders, not actual photography. No reference parity is claimed.
+- **Repository review:** SG-P12 is owner-approved and checkpointed/pushed as `3b8981a`. SG-P20 awaits owner visual review and remains uncommitted. No commit or push is authorized by SG-P20.
 
 ## Document responsibilities
 

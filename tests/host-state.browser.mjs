@@ -9,9 +9,10 @@ import {fileURLToPath} from 'node:url';
 import assert from 'node:assert/strict';
 import {handleRequest} from '../src/worker.js';
 import {createLocalDb} from '../node/db.mjs';
+import {checkGuest} from './guest.browser.mjs';
 
 const root=new URL('../public/',import.meta.url);
-const artifacts=await fs.mkdtemp(path.join(os.tmpdir(),'sg-p12-browser-'));
+const artifacts=await fs.mkdtemp(path.join(os.tmpdir(),'sg-p20-browser-'));
 const baselineCss=execFileSync('git',['show','HEAD:public/styles.css'],{cwd:fileURLToPath(new URL('..',import.meta.url))});
 const db=createLocalDb();
 const server=http.createServer(async(req,res)=>{
@@ -36,6 +37,7 @@ const chrome=spawn(process.env.CHROME_BIN||'google-chrome',[
   '--headless','--no-sandbox','--disable-gpu','--remote-debugging-pipe','--user-data-dir='+artifacts+'/profile','about:blank'
 ],{stdio:['ignore','ignore','ignore','pipe','pipe']});
 let buffer='',sequence=0,session,acceptDialog=false;
+const networkFailures=[],networkRequests=new Map(),navigations=[];
 const pending=new Map();
 chrome.on('error',()=>{for(const item of pending.values())item.reject(Error('Chrome could not start'));});
 chrome.stdio[4].on('error',()=>{});
@@ -44,6 +46,9 @@ chrome.stdio[4].on('data',data=>{
   while((index=buffer.indexOf('\0'))>=0){
     const message=JSON.parse(buffer.slice(0,index));buffer=buffer.slice(index+1);
     if(message.id){const item=pending.get(message.id);if(item){clearTimeout(item.timer);pending.delete(message.id);item.resolve(message);}}
+    if(message.method==='Network.requestWillBeSent')networkRequests.set(message.params.requestId,{method:message.params.request.method,api:message.params.request.url.includes('/api/guides')});
+    if(message.method==='Page.frameNavigated'){const url=new URL(message.params.frame.url);navigations.push({path:url.pathname,step:url.searchParams.get('smoke')});}
+    if(message.method==='Network.loadingFailed'){const p=message.params;networkFailures.push(JSON.stringify({...networkRequests.get(p.requestId),error:p.errorText,canceled:p.canceled,blocked:p.blockedReason,cors:p.corsErrorStatus?.corsError}));}
     if(message.method==='Page.javascriptDialogOpening')void send('Page.handleJavaScriptDialog',{accept:acceptDialog},session);
   }
 });
@@ -59,18 +64,26 @@ const command=(method,params={})=>send(method,params,session);
 async function evaluate(expression){
   const result=await command('Runtime.evaluate',{expression,awaitPromise:true,returnByValue:true,userGesture:true});
   // Never print page expressions, localStorage or exception payloads: they may hold edit credentials.
-  if(result.error||result.result?.exceptionDetails)throw Error('Browser evaluation failed');
+  if(result.error||result.result?.exceptionDetails){
+    const exception=result.result?.exceptionDetails?.exception;
+    const description=exception?.description||'';
+    throw Error('Browser evaluation failed: '+(exception?.className||'command error')+'; fetch failure='+description.includes('Failed to fetch')+'; JSON failure='+description.includes('JSON')+'; network='+networkFailures.slice(-3).join(',')+'; navigation='+JSON.stringify(navigations.slice(-3)));
+  }
   return result.result.result.value;
 }
 async function waitFor(expression){
   for(let i=0;i<100;i++){if(await evaluate(expression))return;await new Promise(r=>setTimeout(r,30));}
-  throw Error('Browser state did not settle');
+  const state=await evaluate("JSON.stringify({editorOpen:document.querySelector('#editor-drawer')?.open,errorShown:document.querySelector('#editor-error')?.hidden===false,saveDisabled:document.querySelector('#save-editor')?.disabled,offline:!navigator.onLine})");
+  throw Error('Browser state did not settle; state='+state+'; network='+networkFailures.slice(-3).join(',')+'; navigation='+JSON.stringify(navigations.slice(-3)));
 }
 let navigationSequence=0;
 async function navigate(route){
-  const url=origin+route+(route.includes('?')?'&':'?')+'smoke='+ ++navigationSequence;
+  const target=new URL(route,origin);target.searchParams.set('smoke',++navigationSequence);
+  const url=target.href;
+  const documentUrl=new URL(url);documentUrl.hash='';
   await command('Page.navigate',{url});
-  await waitFor(`location.href===${JSON.stringify(url)} && document.readyState==='complete'`);
+  // location can change while the previous document still reports complete.
+  await waitFor(`location.href===${JSON.stringify(url)} && document.readyState==='complete' && performance.getEntriesByType('navigation')[0]?.name.split('#')[0]===${JSON.stringify(documentUrl.href)}`);
 }
 async function screenshot(name,width,height){
   await command('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:false});
@@ -147,7 +160,9 @@ async function unchangedPage(route,name,width,height,print=false){
 try{
   const target=await send('Target.createTarget',{url:'about:blank'});
   session=(await send('Target.attachToTarget',{targetId:target.result.targetId,flatten:true})).result.sessionId;
-  await command('Page.enable');await command('Runtime.enable');
+  await command('Page.enable');await command('Runtime.enable');await command('Network.enable');
+  // Native focus, dialog and keyboard checks need a foreground target throughout.
+  await command('Page.bringToFront');
   await send('Browser.grantPermissions',{origin,permissions:['clipboardReadWrite','clipboardSanitizedWrite']});
   await send('Browser.setDownloadBehavior',{behavior:'allow',downloadPath:path.join(artifacts,'downloads')});
   console.log('Checking host flows');
@@ -353,7 +368,6 @@ try{
   console.log('Checking unchanged shared pages');
   await unchangedPage('/', 'marketing-unchanged-desktop',1440,1000);
   await unchangedPage('/', 'marketing-unchanged-mobile',390,844);
-  await unchangedPage(guest,'guest-unchanged-mobile',390,844);
   await unchangedPage(guest+'/card','print-unchanged',390,844,true);
   await navigate(guest);
   assert.ok(await evaluate(`document.body.textContent.includes('Villa Guest')`));
@@ -361,7 +375,9 @@ try{
   assert.equal(await evaluate(`(async()=>{const r=await fetch(location.pathname+'/qr.svg');return r.status})()`),200);
   await command('Emulation.setScriptExecutionDisabled',{value:true});await navigate(guest);
   await screenshot('guest-no-js',390,844);await command('Emulation.setScriptExecutionDisabled',{value:false});
+  await checkGuest({origin,db,artifacts,command,evaluate,navigate,screenshot,waitFor});
   await navigate('/app.html');
+  await waitFor("document.querySelector('#property-heading').textContent==='Sea View Villa' && document.querySelector('#save-status').textContent==='All changes saved'");
   await evaluate(`localStorage.setItem('stayguide-demo-properties','{broken');window.location.reload()`);
   await waitFor(`!!document.querySelector('#state-recovery')&&!document.querySelector('#state-recovery').hidden`);
   assert.ok(await evaluate(`localStorage.getItem('stayguide-demo-properties')==='{broken'`));
@@ -371,7 +387,7 @@ try{
   assert.ok(await evaluate(`Object.keys(localStorage).some(k=>k.startsWith('stayguide-demo-recovery-')&&JSON.parse(localStorage.getItem(k)).properties==='{broken')`));
   assert.ok(await evaluate(`localStorage.getItem('stayguide-demo-properties')==='[]'&&!document.querySelector('#empty-state').hidden`));
   console.log('PASS: create, switching/stale responses, owner editing, clipboard, QR download, keyboard skip/focus, responsive navigation, reduced motion and recovery.');
-  console.log('PASS: marketing desktop/mobile, guest mobile and print screenshots identical with current vs committed shared CSS; JS-disabled guest rendered.');
+  console.log('PASS: marketing desktop/mobile and print screenshots identical with current vs committed shared CSS; JS-disabled guest rendered.');
   console.log('Screenshots: '+artifacts);
 }finally{
   try{await send('Browser.close');}catch{chrome.kill();}
