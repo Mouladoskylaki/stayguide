@@ -4,22 +4,44 @@ A tiny, fast, framework-free digital welcome guide for vacation rentals. Built a
 
 **Status:** working local prototype. **NOT production-ready**. No payments, account recovery, public deployment, or 24-hour expiration. Host edit tokens in localStorage are an intentional temporary demo shortcut, not production authentication.
 
-## Start it locally
+## Project status and roadmap
+
+Start with [the living roadmap](docs/ROADMAP.md) for verified status, milestones, dependencies and the next recommended task. [Implementation tasks](docs/IMPLEMENTATION_TASKS.md) define scope and acceptance criteria; [progress](docs/PROGRESS.md) records chronological evidence, and [decisions](docs/DECISIONS.md) tracks approved constraints and open questions. Agents follow [AGENTS.md](AGENTS.md). Recommendations do not authorize implementation or deployment.
+
+## Edit the interface
+
+Open the repository folder in VS Code. The frontend files stay together in `public/`:
+
+- `public/index.html` — marketing page.
+- `public/app.html` — host editor markup.
+- `public/styles.css` — shared styles.
+- `public/app.js` — host editor JavaScript ES module.
+
+### Go Live — static UI preview
+
+With the VS Code **Live Server** extension installed, click **Go Live**. Workspace settings serve `public/` as the web root. Open `/index.html` for the marketing page or `/app.html` for the editor's initial layout; edit HTML/CSS/JS and save to refresh.
+
+This is **static-only**: Live Server does not run `/api/*` or the server-rendered `/g/*` routes. Creating/loading/saving guides, guest previews, QR generation and print cards require `npm start`. Existing guides from the full app are not shared with Live Server's separate browser origin. Do not use `file://` to open the ES module interface.
+
+### npm start — full local application
 
 Requires Node.js 20+; no `npm install` needed for this local preview.
 
 ```bash
-cd stayguide-prototype
 npm start
 ```
 
 Open **http://127.0.0.1:8787** in a browser. Click **Create your guest guide**, enter a name, edit the Wi-Fi or other cards, preview, or download the QR SVG. Guides and edits persist across server restarts in `.local/guides.json` (local dev only).
+
+Run the command from the repository root, or choose **Terminal → Run Task → StayGuide: Start full local app** in VS Code. Stop the server with **Ctrl+C** in its terminal or **Tasks: Terminate Task** from the Command Palette.
 
 To run tests:
 
 ```bash
 npm test
 ```
+
+You can also choose **Terminal → Run Task → StayGuide: Run tests**. Both tasks use the existing npm scripts; no build step or second application is involved.
 
 QR codes generated locally point to `127.0.0.1` and therefore **will not open from a separate phone**. After real deployment the same feature will automatically use the public HTTPS domain. Local preview data is test-only.
 
@@ -35,7 +57,7 @@ QR codes generated locally point to `127.0.0.1` and therefore **will not open fr
 - Dependency-free QR generator (SVG) and print-friendly QR card.
 - `noindex`, HTML escaping, CSP on public pages, basic field validation.
 - Lighthouse-style priorities: system fonts, no images/fonts/CDNs/frameworks/tracking on real guest pages.
-- Automated Node tests + QR scanner checks + desktop/mobile visual review.
+- Automated Node tests and audit desktop/mobile visual review. QR decoding and physical print verification remain outstanding; see the [verified baseline](docs/ROADMAP.md#verified-baseline-and-completed-work).
 
 ## Not yet included
 
@@ -83,6 +105,8 @@ This vertical slice intentionally uses one `guides` table and simple JSON fields
 **Open:** translation vendor and usage caps, VAT handling / merchant-of-record / billing, account signup method, 24-hour trial abuse defenses, host-to-guest language workflow, image delivery and optimization, domain selection, cache invalidation, analytics privacy.
 
 ## Next implementable milestones
+
+The following are capability areas, not the authorized execution order. See the [roadmap](docs/ROADMAP.md) for current sequencing; SG-P01 remains recommended and unimplemented.
 
 1. **Trial and sign-in:** 24-hour anonymous trial, expiry policy, rate limits, conversion to durable account, secure server-side sessions and recovery. No guest-visible access controls or exposed entry codes.
 2. **Multilingual:** fixed UI localization and **stored** host-text translations, invalidation on source changes and manual correction. First choose a provider using real per-character price and reliable maximum monthly usage.

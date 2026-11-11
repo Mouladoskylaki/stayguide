@@ -2,6 +2,8 @@
 
 **Rule:** One task ID per prompt. Agent must STOP after reporting; no self-directed continuation. Dependencies are explicit. Do not deploy or push.
 
+This file is authoritative for task definitions and acceptance criteria. See [ROADMAP.md](ROADMAP.md) for live statuses, dependency tracking and next steps, [PROGRESS.md](PROGRESS.md) for verification evidence, [DECISIONS.md](DECISIONS.md) for decisions, and [AGENTS.md](../AGENTS.md) for operating rules. Planned work is not implementation authorization.
+
 ## P0 — Repository and baseline
 - **SG-P00** (first): read-only audit of imported v0.2; inspect Git, code, routes, tests, security gaps, screenshot/reference mismatches. No code changes. Output audit report. Acceptance: actual test result, accurate inventory, risks, next proposed task.
 - **SG-P01**: minimal baseline fixes approved after audit, with tests. Acceptance: no regressions; diff reviewed.
