@@ -12,6 +12,35 @@ const FIELDS = [
   { id:'contact', title:'Contact your host', icon:'✉', hint:'An easy way to get in touch.', fields:[['contact','Contact details','textarea','e.g. Call or message on ...']]},
   { id:'additional', title:'Good to know', icon:'◎', hint:'Everything else worth sharing.', fields:[['additional','Additional information','textarea','e.g. Bin collection is on Tuesday.']]}
 ];
+// Local, decorative line icons. Section names remain the accessible labels.
+const SECTION_ICONS = {
+  welcome:'<path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5Z"/>',
+  wifi:'<path d="M3 8a15 15 0 0 1 18 0M6 12a10 10 0 0 1 12 0m-9 4a5 5 0 0 1 6 0"/><circle cx="12" cy="20" r=".8"/>',
+  arrival:'<rect x="3" y="5" width="18" height="16" rx="3"/><path d="M7 3v4m10-4v4M3 11h18m-13 5h3"/>',
+  rules:'<path d="m12 3 8 3v6c0 4-4 7-8 9-4-2-8-5-8-9V6Z"/><path d="m8 12 3 3 5-6"/>',
+  appliances:'<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M4 8h16M7 5.5h.01m3 0h.01"/><circle cx="12" cy="14" r="4"/>',
+  parking:'<path d="m5 8 2-4h10l2 4m-16 5 2-5h14l2 5v6H3Z"/><path d="M3 13h18M6 19v2m12-2v2M6 10h1m10 0h1"/>',
+  local_tips:'<path d="M19 10c0 5-7 11-7 11S5 15 5 10a7 7 0 0 1 14 0Z"/><circle cx="12" cy="10" r="2.5"/>',
+  emergency:'<path d="M9 3h6v6h6v6h-6v6H9v-6H3V9h6Z"/>',
+  contact:'<path d="M7 3H4a1 1 0 0 0-1 1c0 9 8 17 17 17a1 1 0 0 0 1-1v-3l-5-2-2 2a15 15 0 0 1-7-7l2-2Z"/>',
+  additional:'<circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10h.01"/>'
+};
+const sectionIcon=id=>`<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${SECTION_ICONS[id]}</svg>`;
+function propertyInitials(name){
+  const words=String(name||'').trim().split(/\s+/).filter(Boolean);
+  if(!words.length)return '·';
+  return (words.length>1?Array.from(words[0])[0]+Array.from(words.at(-1))[0]:Array.from(words[0]).slice(0,2).join('')).toLocaleUpperCase();
+}
+function identityTone(id){return parseInt(id.slice(-2),16)%4;}
+function sectionState(section,model){
+  const filled=section.fields.filter(([key])=>typeof model[key]==='string'&&model[key].trim()).length;
+  return filled===section.fields.length?'complete':filled?'started':'empty';
+}
+function guideProgress(model){
+  const counts={complete:0,started:0,empty:0,total:FIELDS.length};
+  for(const section of FIELDS)counts[sectionState(section,model)]++;
+  return counts;
+}
 const $ = selector => document.querySelector(selector);
 const esc = v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let guides = [];
@@ -24,7 +53,7 @@ let editorVersion = 0;
 let saveVersion = 0;
 
 function showRecovery(){
-  storageProblem=true;loadVersion++;current=null;closeEditor();
+  storageProblem=true;loadVersion++;current=null;closeEditor();clearGuidePresentation();
   $('#state-recovery').hidden=false;$('#empty-state').hidden=true;$('#editor-shell').hidden=true;
   $('#new-property').disabled=true;
 }
@@ -70,7 +99,7 @@ $('#reset-state').addEventListener('click',()=>{
     showRecovery();
   }
 });
-function showEmpty(){ $('#empty-state').hidden=false;$('#editor-shell').hidden=true;}
+function showEmpty(){ $('#empty-state').hidden=false;$('#editor-shell').hidden=true;clearGuidePresentation();}
 function showEditor(){ $('#empty-state').hidden=true;$('#editor-shell').hidden=false;revealPropertyTab();}
 function updatePropertyScroll(){
   const host=$('#property-tabs');
@@ -94,6 +123,21 @@ $('#property-tabs').addEventListener('focusin',event=>{
   if(event.target.classList.contains('property-tab'))revealPropertyTab(event.target);
 });
 if(typeof ResizeObserver!=='undefined')new ResizeObserver(()=>revealPropertyTab()).observe($('#property-tabs'));
+function clearGuidePresentation(){
+  $('#guide-progress').hidden=true;
+  $('#progress-summary').textContent='';$('#progress-counts').textContent='';
+  $('#section-progress').value=0;
+  $('#property-identity').textContent='·';$('#property-identity').removeAttribute('data-tone');
+  $('#card-counter').textContent='Loading sections…';
+  for(const id of ['view-link','download-qr','print-card']){
+    $('#'+id).removeAttribute('href');$('#'+id).setAttribute('aria-disabled','true');
+  }
+  $('#copy-link').disabled=true;$('#copy-link').textContent='Copy guest link';
+  $('#editor-grid').querySelectorAll('button').forEach(button=>{
+    button.disabled=true;button.setAttribute('data-state','loading');button.removeAttribute('aria-label');
+    const state=button.querySelector('.editor-card-state');if(state)state.textContent='Loading…';
+  });
+}
 function setStatus(msg){ $('#save-status').textContent=msg; }
 async function api(path,options={}){
   const response=await fetch(path,{...options,headers:{'Content-Type':'application/json',...(options.headers||{})}});
@@ -107,15 +151,17 @@ async function createGuide(model){
 function getEntry(){return guides.find(g=>g.id===activeId);}
 async function loadActive(){
   const version=++loadVersion;
-  current=null;closeEditor();
+  current=null;closeEditor();clearGuidePresentation();
+  $('#property-tabs').querySelectorAll('button').forEach(button=>{
+    const selected=button.getAttribute('data-guide-id')===activeId;
+    button.classList.toggle('active',selected);button.setAttribute('aria-pressed',String(selected));
+  });
+  revealPropertyTab();
   const entry=getEntry();if(storageProblem)return;
   if(!entry){showEmpty();return;}
   const isCurrent=()=>version===loadVersion&&activeId===entry.id&&!storageProblem;
   $('#editor-shell').setAttribute('aria-busy','true');
   $('#property-heading').textContent='Loading guide…';setStatus('Loading…');
-  $('#editor-grid').querySelectorAll('button').forEach(b=>{b.disabled=true;});
-  for(const id of ['view-link','download-qr','print-card'])$('#'+id).removeAttribute('href');
-  $('#copy-link').disabled=true;
   try{
     const d=await api(`/api/guides/${entry.id}`,{headers:{Authorization:`Bearer ${entry.token}`}});
     if(!isCurrent())return;
@@ -130,20 +176,38 @@ async function loadActive(){
 function render(){
   const host=$('#property-tabs'),restoreTabFocus=document.activeElement?.parentElement===host;host.replaceChildren();
   guides.forEach((g,index)=>{
-    const b=document.createElement('button');b.type='button';b.className='property-tab'+(g.id===activeId?' active':'');b.textContent=g.id===activeId?current.property_name:(g.label||`Property ${index+1}`);b.addEventListener('click',()=>{activeId=g.id;if(persist())loadActive();});host.append(b);
+    const selected=g.id===activeId,name=selected?current.property_name:(g.label||`Property ${index+1}`);
+    const b=document.createElement('button');b.type='button';b.className='property-tab'+(selected?' active':'');
+    b.setAttribute('data-guide-id',g.id);b.setAttribute('data-tone',identityTone(g.id));
+    b.setAttribute('aria-pressed',String(selected));b.setAttribute('aria-label',name);b.title=name;
+    const identity=document.createElement('span');identity.className='property-identity';identity.setAttribute('aria-hidden','true');identity.textContent=propertyInitials(name);
+    const label=document.createElement('span');label.className='property-tab-label';label.textContent=name;
+    b.append(identity);b.append(label);
+    b.addEventListener('click',()=>{activeId=g.id;if(persist())loadActive();});host.append(b);
   });
   const entry=getEntry();entry.label=current.property_name;if(!persist())return;
   $('#property-heading').textContent=current.property_name;
+  $('#property-identity').textContent=propertyInitials(current.property_name);
+  $('#property-identity').setAttribute('data-tone',identityTone(activeId));
   const link=`${location.origin}/g/${activeId}`;
   $('#view-link').href=link;$('#download-qr').href=`/g/${activeId}/qr.svg`;$('#print-card').href=`/g/${activeId}/card`;
-  $('#copy-link').disabled=false;
-  const grid=$('#editor-grid');grid.replaceChildren();let done=0;
-  for(const sec of FIELDS){const filled=sec.fields.some(([key])=>Boolean(current[key]?.trim()));if(filled)done++;
+  for(const id of ['view-link','download-qr','print-card'])$('#'+id).removeAttribute('aria-disabled');
+  $('#copy-link').disabled=false;$('#copy-link').textContent='Copy guest link';
+  const grid=$('#editor-grid');grid.replaceChildren();
+  for(const sec of FIELDS){
+    const state=sectionState(sec,current),label={empty:'Empty',started:'Started',complete:'Complete'}[state];
     const b=document.createElement('button');b.type='button';b.className='editor-card';
-    b.innerHTML=`<span class="editor-icon">${sec.icon}</span><span class="editor-card-copy"><strong>${esc(sec.title)}</strong><small>${esc(sec.hint)}</small></span><span class="editor-card-state">${filled?'Added ✓':'Add ↗'}</span>`;
+    b.setAttribute('data-section',sec.id);b.setAttribute('data-state',state);
+    b.setAttribute('aria-label',`${sec.title}: ${label}. ${state==='empty'?'Add information':'Edit section'}`);
+    b.innerHTML=`<span class="editor-icon">${sectionIcon(sec.id)}</span><span class="editor-card-copy"><strong>${esc(sec.title)}</strong><small>${esc(sec.hint)}</small></span><span class="editor-card-footer"><span class="editor-card-state">${label}</span><span class="editor-card-action">${state==='empty'?'Add':'Edit'} <span aria-hidden="true">→</span></span></span>`;
     b.addEventListener('click',()=>openEditor(sec));grid.append(b);
   }
-  $('#card-counter').textContent=`${done} of ${FIELDS.length} sections started`;
+  const progress=guideProgress(current);
+  $('#progress-summary').textContent=`${progress.complete} of ${progress.total} sections complete`;
+  $('#progress-counts').textContent=`${progress.started} started · ${progress.empty} empty`;
+  $('#section-progress').max=progress.total;$('#section-progress').value=progress.complete;
+  $('#guide-progress').hidden=false;
+  $('#card-counter').textContent=`${FIELDS.length} editable sections`;
   if(restoreTabFocus)host.querySelector('.property-tab.active')?.focus({preventScroll:true});
   revealPropertyTab();
   setStatus('All changes saved');
@@ -179,7 +243,9 @@ function newProperty(){if(storageProblem)return;loadVersion++;current=null;close
 $('#new-property').addEventListener('click',newProperty);$('#add-tab').addEventListener('click',newProperty);
 $('#copy-link').addEventListener('click',async()=>{
   if(!current||storageProblem)return;
-  const link=`${location.origin}/g/${activeId}`;try{await navigator.clipboard.writeText(link);$('#copy-link').textContent='Copied ✓';}
-  catch{prompt('Copy your guest link:',link);}
+  const id=activeId,version=loadVersion,link=`${location.origin}/g/${id}`;
+  const isCurrent=()=>current&&!storageProblem&&activeId===id&&loadVersion===version;
+  try{await navigator.clipboard.writeText(link);if(isCurrent())$('#copy-link').textContent='Copied ✓';}
+  catch{if(isCurrent())prompt('Copy your guest link:',link);}
 });
 restoreState();

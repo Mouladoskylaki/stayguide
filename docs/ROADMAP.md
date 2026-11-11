@@ -2,15 +2,11 @@
 
 ## Where we are now
 
-StayGuide is a local v0.2 prototype, not production-ready. SG-P00 is DONE as a read-only audit; Developer Experience Setup is DONE. The user reports manually verifying `npm start`, guide editing and guest rendering in VS Code. SG-P01 host state reliability was approved and checkpointed as `46763c6`. The SG-P10 foundation passed owner functional/visual review; requested final mobile property-selector polish is now implemented and validated, awaiting final review before a checkpoint. No production deployment is authorized.
+StayGuide remains a local prototype, not production-ready. SG-P10 was approved, committed and pushed as `50cc34e75dcd33824b093fb97033ac4ca1eec435`. SG-P11 adds initials-based property identities, ten enhanced section cards, saved-field progress and a single working quick-action group. Implementation and validation are DONE; owner visual review is pending. No production deployment is authorized.
 
-Current task: **SG-P10 — Warm Host Dashboard Shell & Design Tokens**, implementation and validation DONE; awaiting user review. No further implementation task is IN PROGRESS. Next recommended task: **SG-P11 — property thumbnail tabs, cards, progress and quick actions**, only after SG-P10 review and explicit authorization. SG-P11 has not started.
+Current task: **SG-P11 — Property Identity, Enhanced Cards, Progress & Quick Actions**. Next recommended task: **SG-P12 — compact accessible editing drawer/mobile panel**, only after SG-P11 review and explicit approval. SG-P12 has not started.
 
-Resumed after SG-SHARE01: the existing six-file SG-P10 work was inspected and preserved; no further application changes were needed against SG-P10 acceptance criteria. Fresh tests, browser checks and 1440px/390px/320px screenshots passed. See the resumed-validation entry in [PROGRESS.md](PROGRESS.md). The temporary sharing helpers and services were left untouched; validation used a separate ephemeral local server and in-memory data.
-
-Final selector follow-up: native scrollbars are hidden while horizontal scrolling remains available; the active tab is revealed after initial render, selection and resize. The add button stays outside the scrollable area; subtle edge chevrons indicate additional properties. Fresh 1440px/390px/320px browser checks include keyboard selection/focus, many/long tabs, scroll-cue updates and usable editor cards at 320px. Only selector presentation/visibility changed; switching/authentication/recovery logic and SG-SHARE01 remain untouched. See the latest evidence in [PROGRESS.md](PROGRESS.md).
-
-Repository snapshot before SG-P10: clean `main` at `46763c6` (`fix: harden host state recovery and property switching`). The prior authorized checkpoint was pushed to `origin/main`. SG-P10 edits are uncommitted; this task performs no commit, push or deployment. This records local Git and prior checkpoint evidence, not a fresh remote-state check.
+SG-P11 began on clean `main` at `50cc34e`. Its changes remain uncommitted; no commit, push or deployment was performed. SG-SHARE01 helpers, configuration, processes and port 8787 were left untouched; browser validation used a separate ephemeral local server and in-memory test guides. See [PROGRESS.md](PROGRESS.md) for verification evidence and limitations.
 
 ## Mission and non-negotiable principles
 
@@ -45,9 +41,10 @@ Evidence is recorded in [PROGRESS.md](PROGRESS.md); historical audit and user ma
 | Developer Experience Setup — no task ID assigned | DONE | `.vscode/settings.json`, `.vscode/tasks.json` and README workflows exist; JSON parsed and all 8 tests passed by direct execution. User now reports `npm start`, editing and guest rendering verified manually in VS Code. Go Live and task-picker interaction have not been separately confirmed. |
 | SG-DOC01 — governance and living roadmap | DONE | Documentation-only changes; at SG-DOC01, `npm test` passed with 1 file-level pass, 0 failures. Direct `node tests/worker.test.js` passed all 8 named tests. Local Markdown links/task coverage and `git diff --check` checked before reporting. Review outcome was not recorded; changes are tracked in the baseline commit. |
 | SG-P01 — host state reliability | DONE | 27 host regressions and 8 existing worker tests passed by direct execution; `npm test` passed with 2 file-level passes. Real Chrome/in-memory Worker smoke passed create/edit, delayed success/error switching, correct owner association, guest/QR and recovery-copy checks. Screenshots at 1440px/390px and recovery at 320px; no page overflow in tested views. Approved by the user and checkpointed/pushed as `46763c6`; no deployment. |
-| SG-P10 — warm host shell and tokens | DONE | Foundation reviewed by owner; final selector polish verified at 1440px/390px/320px, including active-tab bounds after reload/click/keyboard/resize, hidden scrollbars, many/long tabs, visible add button, scroll cues and narrow cards. All 35 named tests and expanded Chrome smoke pass; no page overflow in tested views. Marketing desktop/mobile, guest mobile and print captures match committed shared CSS exactly. Final polish awaits user review; no checkpoint authorized by this task. |
+| SG-P10 — warm host shell and tokens | DONE | Owner approved the foundation and final mobile selector polish; all original 35 named tests and browser checks passed before the authorized checkpoint. Committed/pushed as `50cc34e`; no production deployment. |
+| SG-P11 — property identity, cards, progress and actions | DONE | Initials placeholders, all ten cards, explicit empty/started/complete criteria and one quick-action group. 42 host regressions plus 8 worker tests pass; Chrome verifies saved progress after UI saves/reloads/switches, pending/stale states, correct URLs, keyboard/scrolling, long/many names and 1440px/390px/320px layouts. Owner visual review pending. |
 
-Latest automated baseline, rerun during SG-P10: **35 named tests pass** (27 host-state regressions and 8 existing worker tests). Host coverage includes malformed JSON/invalid structures, untouched originals, recovery copies and storage failures, response ordering, active-property/auth association and stale saves. Worker coverage remains create, SSR/noindex/no edit-token exposure, authorization, updates, escaping/validation, QR/card responses and invalid/missing guides. `npm test` reports 2 passing test files in this environment; direct execution confirms the named counts. No production readiness, latency, QR decoding or complete security certification follows from these tests.
+Latest automated baseline, rerun during SG-P11: **50 named tests pass** (42 host-state/progress regressions and 8 worker tests). These include all previous reliability tests plus 15 targeted cases for saved progress, identities, stale loads/saves/clipboard results, disabled action states and selected-property URLs. `npm test` reports 2 passing test files in this environment; direct execution confirms the named counts. Chrome smoke covers the existing flows and new mixed-content UI. Guest/mobile, marketing/desktop/mobile and print captures match the committed shared CSS. No production readiness, QR decoding or comprehensive accessibility certification follows from these tests.
 
 ## Phases, tasks and dependencies
 
@@ -57,9 +54,9 @@ Latest automated baseline, rerun during SG-P10: **35 named tests pass** (27 host
 |---|---|---|---|
 | P0 — Repository and baseline | SG-P00 | DONE | Audit first; evidence above. |
 | P0 | SG-P01 | DONE | Approved host-state reliability scope implemented: validated saved state with explicit recovery-copy reset, guarded loads/saves and focused regressions. Evidence above; approved and checkpointed as `46763c6`. |
-| P1 — Warm host UI | SG-P10 | DONE | Host tokens and CSS-only responsive sidebar/header implemented after SG-P01. Existing DOM IDs and application JavaScript retained; visual review pending. |
-| P1 | SG-P11 | NEXT | Property tabs/cards/progress/actions using existing data; P0 gate applies; expected to build on SG-P10 shell. |
-| P1 | SG-P12 | PLANNED | Compact accessible editing panel; P0 gate applies; coordinate with SG-P10/SG-P11 and saved-state behavior. |
+| P1 — Warm host UI | SG-P10 | DONE | Approved responsive host shell and mobile selector polish; checkpointed/pushed as `50cc34e`. |
+| P1 | SG-P11 | DONE | Approved identity/card/progress/action scope implemented using existing saved data. Empty/started/complete criteria explained; loading/stale states protected. Evidence above; visual review pending. |
+| P1 | SG-P12 | NEXT | Compact accessible editing panel; P0 gate applies; coordinate with SG-P10/SG-P11 and saved-state behavior. |
 | P2 — Guest UI and print | SG-P20 | PLANNED | Warm SSR guest layout; retain current guide model and non-JS reading. Confirm sequencing after baseline fixes. |
 | P2 | SG-P21 | PLANNED | Print/QR screen and PNG/SVG exports; preserve stable guest URLs and prove QR decoding. Coordinate with SG-P20. |
 | P2 | SG-P22 | PLANNED | A4/A5 welcome-book PDF from shared data; PDF approach remains open (D-013), with pagination/font verification required. Coordinate with SG-P20/SG-P21. |
@@ -95,8 +92,8 @@ These summarize the existing task acceptance criteria; they do not replace detai
 - **Public content privacy:** editor currently lacks explicit safeguards against private entry information; escaping is not confidentiality protection.
 - **Open decisions:** D-008–D-013 cover architecture/storage, translation cost/quotas, payment/tax viability, authentication/trial policy, name/domain conflict, PDF/photo policy and provisional discounts. No provider, purchase or architecture change is approved by this roadmap.
 - **Verification gaps:** no real Cloudflare/D1 smoke test, measured field performance, QR decoding, physical print verification or comprehensive accessibility/security review. User-confirmed local flows do not close these gates.
-- **Visual completeness:** SG-P10 supplies the dark host sidebar, warm workspace and coherent tokens. Thumbnail tabs, enhanced cards/progress/quick actions, reference photography, guest tiles/language switch and print workspace remain future work. Drawer behavior/redesign remains SG-P12. No reference parity is claimed.
-- **Repository review:** SG-P10 awaits visual review and remains uncommitted. SG-P01 was approved and pushed in the preceding checkpoint; no new commit or push is authorized here.
+- **Visual completeness:** SG-P11 supplies initials-based visual identities, enhanced cards, saved-field progress and quick actions on the SG-P10 shell. Real photos/storage remain SG-P30, drawer accessibility/redesign SG-P12, guest tiles/languages and the print workspace later approved tasks. Initials are placeholders, not actual photography. No reference parity is claimed.
+- **Repository review:** SG-P11 awaits owner visual review and remains uncommitted. SG-P10 is checkpointed/pushed as `50cc34e`; no new commit or push is authorized by SG-P11.
 
 ## Document responsibilities
 

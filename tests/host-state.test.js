@@ -11,15 +11,16 @@ const tick=()=>new Promise(resolve=>setImmediate(resolve));
 
 // Run the actual host entrypoint, with only its browser boundary replaced.
 function dashboard(initial={},options={}){
-  const values=new Map(Object.entries(initial)),writes=[],requests=[],alerts=[];
+  const values=new Map(Object.entries(initial)),writes=[],requests=[],alerts=[],prompts=[];
   class Element {
-    constructor(){this.hidden=false;this.disabled=false;this.children=[];this.listeners={};this.attributes={};this.textContent='';this.value='';this.classList={add(){},remove(){}};}
+    constructor(){this.hidden=false;this.disabled=false;this.children=[];this.listeners={};this.attributes={};this.textContent='';this.value='';this.classList={add(){},remove(){},contains:name=>this.className?.split(' ').includes(name),toggle:(name,on)=>{const classes=new Set((this.className||'').split(' ').filter(Boolean));if(on)classes.add(name);else classes.delete(name);this.className=[...classes].join(' ');}};}
     addEventListener(type,fn){this.listeners[type]=fn;}
     append(child){this.children.push(child);}
     replaceChildren(){this.children=[];}
     querySelector(){return element('#input');}
     querySelectorAll(){return this.children;}
-    setAttribute(k,v){this.attributes[k]=v;}
+    setAttribute(k,v){this.attributes[k]=String(v);}
+    getAttribute(k){return this.attributes[k]??null;}
     removeAttribute(k){delete this.attributes[k];if(k==='href')delete this.href;}
     focus(){}
     click(){return this.listeners.click?.();}
@@ -33,13 +34,13 @@ function dashboard(initial={},options={}){
   };
   const context=vm.createContext({
     document:{querySelector:element,createElement:()=>new Element(),body:new Element(),addEventListener(){}},
-    localStorage,location:{origin:'http://localhost'},navigator:{clipboard:{writeText:async()=>{}}},
-    confirm:()=>options.confirm!==false,alert:msg=>alerts.push(msg),prompt(){},
+    localStorage,location:{origin:'http://localhost'},navigator:{clipboard:{writeText:options.writeClipboard||(async()=>{})}},
+    confirm:()=>options.confirm!==false,alert:msg=>alerts.push(msg),prompt:msg=>prompts.push(msg),
     FormData:class {get(key){return options.form?.[key]??'';}},
     fetch:(path,init)=>new Promise((resolve,reject)=>requests.push({path,init,fail:reject,reply:(body,ok=true)=>resolve({ok,json:async()=>body})}))
   });
   vm.runInContext(source,context);
-  return {values,writes,requests,alerts,element,run:code=>vm.runInContext(code,context),options};
+  return {values,writes,requests,alerts,prompts,element,run:code=>vm.runInContext(code,context),options};
 }
 
 for(const [name,raw] of [
@@ -185,4 +186,120 @@ test('a newer save in the same editor owns the resulting UI',async()=>{
   assert.equal(d.element('#editor-drawer').hidden,false);
   d.requests[2].reply(response(a,'Latest save'));await second;
   assert.equal(d.element('#property-heading').textContent,'Latest save');
+});
+
+const progressOf=(d,model)=>JSON.parse(d.run(`JSON.stringify(guideProgress(${JSON.stringify(model)}))`));
+for(const [name,model,expected] of [
+  ['empty',{},[0,0,10]],
+  ['name alone',{property_name:'House'},[0,1,9]],
+  ['partial multi-field sections',{property_name:'House',wifi_name:'Network',checkin:'After 3'},[0,3,7]],
+  ['mixed complete and started',{property_name:'House',welcome:'Welcome',wifi_name:'Network',rules:'Quiet hours'},[2,1,7]],
+  ['whitespace only',{property_name:'  ',welcome:'\n',wifi_name:' '},[0,0,10]]
+]){
+  test('saved progress: '+name,()=>{
+    const d=dashboard(),p=progressOf(d,model);
+    assert.deepEqual([p.complete,p.started,p.empty],expected);assert.equal(p.total,10);
+  });
+}
+test('all ten sections complete only when all existing fields have text',()=>{
+  const d=dashboard();const model=d.run(`Object.fromEntries(FIELDS.flatMap(s=>s.fields.map(([key])=>[key,'Saved text'])))`);
+  assert.deepEqual(progressOf(d,model),{complete:10,started:0,empty:0,total:10});
+  delete model.checkout;
+  assert.deepEqual(progressOf(d,model),{complete:9,started:1,empty:0,total:10});
+});
+test('property initials handle whitespace, single names and Unicode without new stored fields',()=>{
+  const d=dashboard();
+  assert.equal(d.run(`propertyInitials(' Sea View Villa ')`),'SV');
+  assert.equal(d.run(`propertyInitials('Cottage')`),'CO');
+  assert.equal(d.run(`propertyInitials('Σπίτι Θέα')`),'ΣΘ');
+  assert.equal(d.run(`propertyInitials('')`),'·');
+});
+test('ten cards report saved empty/started/complete states and explicit editing actions',async()=>{
+  const d=dashboard({[STORAGE]:JSON.stringify([a]),[ACTIVE]:a.id});
+  d.requests[0].reply({id:a.id,guide:{property_name:'House',wifi_name:'Network',rules:'Saved rule'}});await tick();
+  const cards=d.element('#editor-grid').children;assert.equal(cards.length,10);
+  assert.equal(cards[0].getAttribute('data-state'),'started');
+  assert.equal(cards[1].getAttribute('data-state'),'started');
+  assert.equal(cards[2].getAttribute('data-state'),'empty');
+  assert.equal(cards[3].getAttribute('data-state'),'complete');
+  assert.match(cards[3].getAttribute('aria-label'),/Complete.*Edit section/);
+  assert.match(cards[2].getAttribute('aria-label'),/Empty.*Add information/);
+  assert.equal(d.element('#progress-summary').textContent,'1 of 10 sections complete');
+  assert.equal(d.element('#progress-counts').textContent,'2 started · 7 empty');
+});
+test('progress updates only after successful save and stays accurate after reload',async()=>{
+  const d=await loaded();
+  d.element('#editor-grid').children[0].click();d.options.form={property_name:'Alpha',welcome:'Welcome'};
+  const saving=d.element('#section-form').listeners.submit({preventDefault(){},target:{}});
+  assert.equal(d.element('#progress-summary').textContent,'0 of 10 sections complete');
+  const model={property_name:'Alpha',welcome:'Welcome',wifi_name:'Alpha network'};
+  d.requests[1].reply({id:a.id,guide:model});await saving;
+  assert.equal(d.element('#progress-summary').textContent,'1 of 10 sections complete');
+  assert.equal(d.element('#section-progress').value,1);
+  const reload=dashboard(Object.fromEntries(d.values));reload.requests[0].reply({id:a.id,guide:model});await tick();
+  assert.equal(reload.element('#progress-summary').textContent,'1 of 10 sections complete');
+  assert.equal(reload.element('#progress-counts').textContent,'1 started · 8 empty');
+});
+test('switching hides progress and disables all quick actions; stale results cannot replace selected progress',async()=>{
+  const d=await loaded(),tabs=d.element('#property-tabs').children;
+  tabs[0].click();tabs[1].click();
+  assert.equal(d.element('#guide-progress').hidden,true);assert.equal(d.element('#progress-summary').textContent,'');
+  assert.equal(d.element('#copy-link').disabled,true);
+  for(const id of ['view-link','download-qr','print-card']){
+    assert.equal(d.element('#'+id).href,undefined);assert.equal(d.element('#'+id).getAttribute('aria-disabled'),'true');
+  }
+  d.requests[2].reply({id:b.id,guide:{property_name:'Beta',rules:'Saved rule'}});await tick();
+  d.requests[1].reply({id:a.id,guide:{property_name:'Alpha',welcome:'Saved',rules:'Saved',contact:'Saved'}});await tick();
+  assert.equal(d.element('#progress-summary').textContent,'1 of 10 sections complete');
+  assert.equal(d.element('#progress-counts').textContent,'1 started · 8 empty');
+  assert.equal(d.element('#view-link').href,'http://localhost/g/'+b.id);
+  assert.equal(d.element('#download-qr').href,'/g/'+b.id+'/qr.svg');
+  assert.equal(d.element('#print-card').href,'/g/'+b.id+'/card');
+  assert.equal(d.element('#copy-link').disabled,false);
+  for(const id of ['view-link','download-qr','print-card'])assert.equal(d.element('#'+id).getAttribute('aria-disabled'),null);
+});
+test('stale failure cannot hide the current progress; current failure removes its actions',async()=>{
+  const d=await loaded(),tabs=d.element('#property-tabs').children;
+  tabs[0].click();tabs[1].click();d.requests[2].reply({id:b.id,guide:{property_name:'Beta',contact:'Saved'}});await tick();
+  d.requests[1].fail(Error('Stale load'));await tick();
+  assert.equal(d.element('#guide-progress').hidden,false);assert.equal(d.element('#section-progress').value,1);
+  d.element('#property-tabs').children[0].click();d.requests[3].fail(Error('Current failure'));await tick();
+  assert.equal(d.element('#guide-progress').hidden,true);assert.equal(d.element('#copy-link').disabled,true);
+  assert.equal(d.element('#view-link').href,undefined);
+});
+test('inactive identity labels preserve long names and use text rather than HTML',async()=>{
+  const name='<img src=x onerror=alert(1)> '+ 'x'.repeat(40);
+  const d=dashboard({[STORAGE]:JSON.stringify([{...a,label:name},b]),[ACTIVE]:b.id});
+  d.requests[0].reply(response(b,'Beta'));await tick();
+  const tab=d.element('#property-tabs').children[0];
+  assert.equal(tab.getAttribute('aria-label'),name);assert.equal(tab.children[1].textContent,name);
+  assert.equal(tab.innerHTML,undefined);assert.equal(tab.children[0].getAttribute('aria-hidden'),'true');
+});
+test('late clipboard completion or failure cannot claim a different selected property was copied',async()=>{
+  for(const fail of [false,true]){
+    let resolve,reject;
+    const d=dashboard({[STORAGE]:JSON.stringify([a,b]),[ACTIVE]:a.id},{writeClipboard:()=>new Promise((yes,no)=>{resolve=yes;reject=no;})});
+    d.requests[0].reply(response(a,'Alpha'));await tick();
+    const copying=d.element('#copy-link').click();d.element('#property-tabs').children[1].click();
+    d.requests[1].reply(response(b,'Beta'));await tick();
+    if(fail)reject(Error('Clipboard failed'));else resolve();await copying;
+    assert.equal(d.element('#copy-link').textContent,'Copy guest link');assert.equal(d.prompts.length,0);
+  }
+});
+test('rejected drafts do not advance saved progress',async()=>{
+  const d=await loaded();d.element('#editor-grid').children[0].click();
+  d.options.form={property_name:'Alpha',welcome:'Unsaved draft'};
+  const saving=d.element('#section-form').listeners.submit({preventDefault(){},target:{}});
+  d.requests[1].reply({error:'Save failed'},false);await saving;
+  assert.equal(d.element('#progress-summary').textContent,'0 of 10 sections complete');
+  assert.equal(d.element('#progress-counts').textContent,'2 started · 8 empty');
+});
+test('a stale save cannot apply its more-complete progress to the current property',async()=>{
+  const d=await loaded();d.element('#editor-grid').children[0].click();
+  const saving=d.element('#section-form').listeners.submit({preventDefault(){},target:{}});
+  d.element('#property-tabs').children[1].click();
+  d.requests[2].reply({id:b.id,guide:{property_name:'Beta',contact:'Saved contact'}});await tick();
+  d.requests[1].reply({id:a.id,guide:{property_name:'Alpha',welcome:'Saved welcome',rules:'Saved rules',contact:'Saved contact'}});await saving;
+  assert.equal(d.element('#progress-summary').textContent,'1 of 10 sections complete');
+  assert.equal(d.element('#progress-counts').textContent,'1 started · 8 empty');
 });

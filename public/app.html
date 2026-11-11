@@ -18,7 +18,33 @@
 <main class="app-main" id="dashboard-main" tabindex="-1"><div class="dashboard-intro"><div><span class="eyebrow">YOUR WELCOME SPACE</span><h1>Make yourself at home.</h1><p>One lovely guide for every place you host.</p></div><button class="button button-secondary" id="new-property">＋ Add a property</button></div>
 <section id="state-recovery" class="empty-state" aria-labelledby="recovery-title" hidden><h2 id="recovery-title">Your saved property list needs attention.</h2><p id="recovery-message" role="status">We could not read this browser’s saved property list. It has not been erased. Retry after restoring your browser data, or keep a recovery copy and start fresh.</p><p><button type="button" class="button button-secondary" id="retry-state">Retry saved data</button></p><p><button type="button" class="button button-secondary" id="reset-state">Back up and start fresh</button></p><small>Recovery copies stay in this browser’s local storage under stayguide-demo-recovery-. To restore one with technical help, copy its properties and active values back to stayguide-demo-properties and stayguide-demo-active, then retry. These copies contain private editing access: do not share them or clear browser data.</small></section>
 <div id="empty-state" class="empty-state"><div class="empty-illustration">✳</div><h2>Let's make your first guide.</h2><p>No signup, no complicated setup. Just a lovely place to start.</p><form id="create-form"><label for="first-name">What's your property called?</label><div class="create-input-row"><input id="first-name" maxlength="80" placeholder="e.g. The Little Olive House" required autofocus><button type="submit" class="button button-primary">Create my guide <span aria-hidden="true">↗</span></button></div></form><small>You can change everything later.</small></div>
-<section id="editor-shell" class="editor-shell" hidden><div class="property-strip"><div class="property-tabs" id="property-tabs" aria-label="Your properties"></div><button type="button" class="add-property-tab" id="add-tab" aria-label="Add a property">＋</button></div><div class="property-summary"><div><span class="summary-label">EDITING YOUR GUIDE</span><h2 id="property-heading">Your place</h2><p id="save-status" role="status">All changes saved</p></div><a id="view-link" target="_blank" rel="noopener" class="button button-primary">Preview guest guide ↗</a></div><div class="section-title"><div><h3>Everything in its place.</h3><p>Tap a card to add details. Empty sections stay hidden from guests.</p></div><span class="card-counter" id="card-counter"></span></div><div class="editor-grid" id="editor-grid"></div><div class="share-panel"><div><span class="eyebrow">READY TO WELCOME?</span><h3>One guide. Any guest.</h3><p>Your link stays the same when you make changes.</p></div><div class="share-actions"><button type="button" class="button button-primary" id="copy-link">Copy guest link</button><a id="download-qr" class="button button-secondary" download="stayguide-qr.svg">↓ Download QR</a><a id="print-card" class="button button-secondary" target="_blank" rel="noopener">▧ Print QR card</a></div></div><p class="prototype-caution">Prototype note: editing access is saved in this browser. Keep this browser's data to continue editing. Accounts, 24-hour expiry, translations and billing are not implemented yet.</p></section></main>
+<section id="editor-shell" class="editor-shell" hidden>
+  <div class="property-strip"><div class="property-tabs" id="property-tabs" aria-label="Your properties"></div><button type="button" class="add-property-tab" id="add-tab" aria-label="Add a property">＋</button></div>
+  <div class="property-overview">
+    <section class="property-summary" aria-labelledby="property-heading">
+      <div class="property-summary-head">
+        <span class="property-identity property-identity-large" id="property-identity" aria-hidden="true"></span>
+        <div><span class="summary-label">EDITING YOUR GUIDE</span><h2 id="property-heading">Your place</h2><p id="save-status" role="status">All changes saved</p></div>
+      </div>
+      <nav class="guide-actions" aria-label="Guest guide actions">
+        <a id="view-link" target="_blank" rel="noopener" class="button button-primary" aria-label="Preview guest guide (opens in a new tab)">Preview guide</a>
+        <button type="button" class="button button-secondary" id="copy-link">Copy guest link</button>
+        <a id="download-qr" class="button button-secondary" download="stayguide-qr.svg">↓ QR SVG</a>
+        <a id="print-card" class="button button-secondary" target="_blank" rel="noopener" aria-label="Print QR card (opens in a new tab)">Print QR card</a>
+      </nav>
+    </section>
+    <section class="guide-progress" id="guide-progress" aria-labelledby="progress-heading" hidden>
+      <h3 id="progress-heading">Guide progress</h3>
+      <p id="progress-summary" role="status"></p>
+      <progress id="section-progress" max="10" value="0" aria-labelledby="progress-heading progress-summary"></progress>
+      <p class="progress-counts" id="progress-counts"></p>
+      <details class="progress-help"><summary>How is this counted?</summary><p>Complete means every field in that section has saved text. Started means only some fields have text; empty means none do. Welcome needs a name and a welcome message. Sections are optional: this counts filled fields, not guest readiness.</p></details>
+    </section>
+  </div>
+  <div class="section-title"><div><h3>Make their stay feel effortless.</h3><p>Add the little details that make a big difference.</p></div><span class="card-counter" id="card-counter"></span></div>
+  <div class="editor-grid" id="editor-grid"></div>
+  <p class="prototype-caution">Prototype note: editing access is saved in this browser. Keep this browser's data to continue editing. Accounts, 24-hour expiry, translations and billing are not implemented yet.</p>
+</section></main>
 </div>
 <div class="drawer-overlay" id="drawer-overlay" hidden></div><aside class="editor-drawer" id="editor-drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title" hidden><div class="drawer-top"><div><span class="eyebrow">EDIT SECTION</span><h2 id="drawer-title">Wi-Fi</h2></div><button id="close-drawer" type="button" class="close-icon" aria-label="Close editor">×</button></div><form id="section-form"><div id="drawer-fields"></div><div class="drawer-bottom"><button type="button" id="cancel-editor" class="button button-secondary">Cancel</button><button type="submit" class="button button-primary" id="save-editor">Save changes</button></div></form></aside>
 <script type="module" src="/app.js"></script></body></html>

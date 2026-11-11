@@ -11,7 +11,7 @@ import {handleRequest} from '../src/worker.js';
 import {createLocalDb} from '../node/db.mjs';
 
 const root=new URL('../public/',import.meta.url);
-const artifacts=await fs.mkdtemp(path.join(os.tmpdir(),'sg-p10-browser-'));
+const artifacts=await fs.mkdtemp(path.join(os.tmpdir(),'sg-p11-browser-'));
 const baselineCss=execFileSync('git',['show','HEAD:public/styles.css'],{cwd:fileURLToPath(new URL('..',import.meta.url))});
 const db=createLocalDb();
 const server=http.createServer(async(req,res)=>{
@@ -90,6 +90,17 @@ async function assertPropertySelector(){
       document.documentElement.scrollWidth<=innerWidth;
   })()`),'Selected tab is fully visible, scrollbar hidden and add button reachable');
 }
+async function assertSavedProgress(complete,started,empty){
+  assert.ok(await evaluate(`!document.querySelector('#guide-progress').hidden`));
+  assert.equal(await evaluate(`document.querySelector('#progress-summary').textContent`),complete+' of 10 sections complete');
+  assert.equal(await evaluate(`document.querySelector('#section-progress').value`),complete);
+  assert.equal(await evaluate(`document.querySelector('#progress-counts').textContent`),started+' started · '+empty+' empty');
+}
+async function saveSection(index,values){
+  await evaluate(`document.querySelectorAll('.editor-card')[${index}].click()`);
+  await evaluate(`for(const [key,value] of Object.entries(${JSON.stringify(values)}))document.querySelector('#edit-'+key).value=value;document.querySelector('#section-form').requestSubmit()`);
+  await waitFor(`document.querySelector('#editor-drawer').hidden`);
+}
 async function checkPropertySelector(width,name){
   await command('Emulation.setDeviceMetricsOverride',{width,height:width===1440?1000:844,deviceScaleFactor:1,mobile:false});
   await new Promise(resolve=>setTimeout(resolve,100));
@@ -97,16 +108,23 @@ async function checkPropertySelector(width,name){
   await navigate('/app.html');
   await waitFor(`document.querySelector('#property-heading').textContent==='Sea View Villa'`);
   await assertPropertySelector(); // Initial render while editor was hidden.
+  await assertSavedProgress(2,2,6);
   await evaluate(`document.querySelector('.property-tab').click()`);
   await waitFor(`document.querySelector('#property-heading').textContent==='Olive Apartment'`);
-  await assertPropertySelector();
+  await assertPropertySelector();await assertSavedProgress(0,1,9);
   await evaluate(`document.querySelectorAll('.property-tab')[1].focus()`);
   await command('Input.dispatchKeyEvent',{type:'keyDown',key:'Enter',code:'Enter',windowsVirtualKeyCode:13,text:'\r'});
   await command('Input.dispatchKeyEvent',{type:'keyUp',key:'Enter',code:'Enter',windowsVirtualKeyCode:13});
   await waitFor(`document.querySelector('#property-heading').textContent==='Sea View Villa'`);
   await assertPropertySelector();
+  await assertSavedProgress(2,2,6);
   assert.ok(await evaluate(`document.activeElement===document.querySelector('.property-tab.active')`),'Selection preserves property-tab keyboard focus');
   await screenshot(name,width,width===1440?1000:844);
+  if(width<650){
+    await evaluate(`document.querySelector('.property-strip').scrollIntoView({block:'start',behavior:'instant'})`);
+    const image=await command('Page.captureScreenshot',{format:'png'});
+    await fs.writeFile(path.join(artifacts,name+'-overview.png'),Buffer.from(image.result.data,'base64'));
+  }
 }
 // Compare unaffected pages against the committed shared CSS in the same browser,
 // at the same URL/viewport so even the QR image remains deterministic.
@@ -145,7 +163,7 @@ try{
     return actualFetch(url,options);
   };
   document.querySelectorAll('.property-tab')[0].click();document.querySelectorAll('.property-tab')[1].click()`);
-  assert.ok(await evaluate(`document.querySelector('#copy-link').disabled && !document.querySelector('#view-link').hasAttribute('href')`));
+  assert.ok(await evaluate(`document.querySelector('#copy-link').disabled && ['view-link','download-qr','print-card'].every(id=>!document.querySelector('#'+id).hasAttribute('href')&&document.querySelector('#'+id).getAttribute('aria-disabled')==='true') && document.querySelector('#guide-progress').hidden && document.querySelector('#progress-summary').textContent===''`));
   await evaluate('loads[1].release()');await waitFor(`document.querySelector('#save-status').textContent==='All changes saved'`);
   await evaluate('loads[0].release()');await new Promise(r=>setTimeout(r,100));
   assert.equal(await evaluate(`document.querySelector('#property-heading').textContent`),'Sea View Villa');
@@ -157,6 +175,14 @@ try{
   await waitFor(`document.querySelector('#editor-drawer').hidden`);
   const guest=await evaluate(`new URL(document.querySelector('#view-link').href).pathname`);
   assert.ok(await evaluate(`(async()=>{const entries=JSON.parse(localStorage.getItem('stayguide-demo-properties'));const selected=entries.find(e=>document.querySelector('#view-link').href.endsWith(e.id));const r=await fetch('/api/guides/'+selected.id,{headers:{Authorization:'Bearer '+selected.token}});return (await r.json()).guide.wifi_name==='Villa Guest'})()`));
+  // All data below is saved through the existing editor, not inferred from drafts.
+  await saveSection(0,{welcome:'Welcome to your little place by the sea.'});
+  await saveSection(3,{rules:'Please keep the house smoke-free. Thank you.'});
+  await saveSection(2,{checkin:'Check in after 15:00.'});
+  await assertSavedProgress(2,2,6);
+  assert.ok(await evaluate(`document.querySelectorAll('.editor-card').length===10 && document.querySelector('[data-section="wifi"]').dataset.state==='started' && document.querySelector('[data-section="arrival"]').dataset.state==='started' && document.querySelector('[data-section="welcome"]').dataset.state==='complete'`));
+  assert.ok(await evaluate(`document.querySelectorAll('.property-tab .property-identity').length===2 && !document.querySelector('.property-tabs img') && document.querySelector('.property-tab.active').getAttribute('aria-pressed')==='true' && document.querySelector('#property-identity').textContent==='SV'`));
+  assert.ok(await evaluate(`document.querySelectorAll('#view-link').length===1 && document.querySelector('.guide-actions').children.length===4`));
   console.log('Capturing responsive shell');
   await checkPropertySelector(1440,'host-desktop');
   assert.ok(await evaluate(`getComputedStyle(document.querySelector('.host-sidebar')).position==='sticky' && document.querySelector('.host-sidebar').getBoundingClientRect().width===232`));
@@ -199,6 +225,13 @@ try{
   await evaluate(`localStorage.setItem('stayguide-demo-properties',localStorage.getItem('__tabs-original-properties'));localStorage.setItem('stayguide-demo-active',localStorage.getItem('__tabs-original-active'));localStorage.removeItem('__tabs-original-properties');localStorage.removeItem('__tabs-original-active')`);
   await navigate('/app.html');await waitFor(`document.querySelector('#property-heading').textContent==='Sea View Villa'`);
   console.log('PASS: selector resize/reload/click/keyboard at 1440/390/320, many/long tabs, wheel scrolling/cues, visible add button and narrow editor cards.');
+  await assertSavedProgress(2,2,6);
+  await evaluate(`document.querySelector('.progress-help').open=true`);
+  await evaluate(`document.querySelector('#guide-progress').scrollIntoView({block:'start',behavior:'instant'})`);
+  const explained=await command('Page.captureScreenshot',{format:'png'});
+  await fs.writeFile(path.join(artifacts,'progress-explained-320.png'),Buffer.from(explained.result.data,'base64'));
+  await evaluate(`document.querySelector('.progress-help').open=false`);
+  console.log('PASS: saved progress after UI saves/reloads/switches, partial multi-field states, identity placeholders, and one safe quick-action group.');
   // Native clipboard, QR download and the existing print-card link.
   console.log('Checking clipboard and downloads');
   await command('Page.bringToFront');
