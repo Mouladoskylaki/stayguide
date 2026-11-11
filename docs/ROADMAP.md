@@ -2,11 +2,11 @@
 
 ## Where we are now
 
-StayGuide is a local v0.2 prototype, not production-ready. SG-P00 is DONE as a read-only audit; Developer Experience Setup is DONE. The user reports manually verifying `npm start`, guide editing and guest rendering in VS Code. SG-P01 has been recommended but is not implemented or authorized by this documentation task. No production deployment is authorized.
+StayGuide is a local v0.2 prototype, not production-ready. SG-P00 is DONE as a read-only audit; Developer Experience Setup is DONE. The user reports manually verifying `npm start`, guide editing and guest rendering in VS Code. SG-P01 host state reliability is now DONE with automated and browser evidence; user review is pending. No production deployment is authorized.
 
-Current task: **SG-DOC01 — Project Governance & Living Roadmap**, documentation and validation DONE; awaiting user review. No implementation task is IN PROGRESS. Next recommended task: **SG-P01**, limited to host state reliability, subject to explicit scope approval.
+Current task: **SG-P01 — Host State Reliability**, implementation and validation DONE; awaiting user review. No further implementation task is IN PROGRESS. Next recommended task: **SG-P10 — design tokens and responsive host shell/sidebar**, only after SG-P01 review and explicit authorization. SG-P10 has not started.
 
-Repository snapshot for SG-DOC01: branch `main`, latest local commit `5779f84` (`chore: initialize StayGuide project`). README/progress edits and untracked `.vscode/` files from Developer Experience Setup were already present before this task. The roadmap and governance edits are also uncommitted. No fetch or push was performed; this is local Git evidence, not a claim about current remote contents.
+Repository snapshot before SG-P01: clean working tree on `main`, latest local commit `0942b17` (`docs: establish project roadmap and agent workflow`). Developer Experience Setup and governance documentation are now tracked in that baseline. SG-P01 edits are uncommitted; no fetch, commit or push was performed by this task. This records local Git evidence, not current remote contents.
 
 ## Mission and non-negotiable principles
 
@@ -33,15 +33,16 @@ Before implementation, read this roadmap and the task definition. Execute only t
 
 ## Verified baseline and completed work
 
-Evidence is recorded in [PROGRESS.md](PROGRESS.md); historical audit and manual checks are not new tests performed by SG-DOC01.
+Evidence is recorded in [PROGRESS.md](PROGRESS.md); historical audit and user manual checks are distinct from the new SG-P01 automated/browser checks.
 
 | Item | Status | Verification evidence and limits |
 |---|---|---|
 | SG-P00 — read-only baseline audit | DONE | Audit report in this conversation: inventory, Git/security review, desktop/mobile screenshots, in-memory create/edit/guest/QR/card smoke checks and guest reading without JS. Direct test execution passed all 8 worker tests. No repository files changed during that task. QR decoding, physical printing and Cloudflare/D1 execution were not verified. |
 | Developer Experience Setup — no task ID assigned | DONE | `.vscode/settings.json`, `.vscode/tasks.json` and README workflows exist; JSON parsed and all 8 tests passed by direct execution. User now reports `npm start`, editing and guest rendering verified manually in VS Code. Go Live and task-picker interaction have not been separately confirmed. |
-| SG-DOC01 — governance and living roadmap | DONE | Documentation-only changes; current `npm test` passed with 1 file-level pass, 0 failures. Direct `node tests/worker.test.js` passed all 8 named tests. Local Markdown links/task coverage and `git diff --check` checked before reporting. Awaiting user review. |
+| SG-DOC01 — governance and living roadmap | DONE | Documentation-only changes; at SG-DOC01, `npm test` passed with 1 file-level pass, 0 failures. Direct `node tests/worker.test.js` passed all 8 named tests. Local Markdown links/task coverage and `git diff --check` checked before reporting. Review outcome was not recorded; changes are tracked in the baseline commit. |
+| SG-P01 — host state reliability | DONE | 27 host regressions and 8 existing worker tests passed by direct execution; `npm test` passed with 2 file-level passes. Real Chrome/in-memory Worker smoke passed create/edit, delayed success/error switching, correct owner association, guest/QR and recovery-copy checks. Screenshots at 1440px/390px and recovery at 320px; no page overflow in tested views. Diff reviewed; user review pending. |
 
-Latest automated baseline, rerun during SG-DOC01: eight tests cover create, SSR/noindex/no edit-token exposure, owner authorization, stable-address updates, escaping/field rejection, QR/card responses, QR dimensions/length limits and invalid/missing guides. The `npm test` file-level count is an observed reporting limitation in this environment; it is not an eight-test count. No production readiness, latency, QR decoding or complete security certification follows from these tests.
+Latest automated baseline, rerun during SG-P01: **35 named tests pass** (27 host-state regressions and 8 existing worker tests). Host coverage includes malformed JSON/invalid structures, untouched originals, recovery copies and storage failures, response ordering, active-property/auth association and stale saves. Worker coverage remains create, SSR/noindex/no edit-token exposure, authorization, updates, escaping/validation, QR/card responses and invalid/missing guides. `npm test` reports 2 passing test files in this environment; direct execution confirms the named counts. No production readiness, latency, QR decoding or complete security certification follows from these tests.
 
 ## Phases, tasks and dependencies
 
@@ -50,8 +51,8 @@ Latest automated baseline, rerun during SG-DOC01: eight tests cover create, SSR/
 | Phase | Task | Status | Scope summary and dependencies |
 |---|---|---|---|
 | P0 — Repository and baseline | SG-P00 | DONE | Audit first; evidence above. |
-| P0 | SG-P01 | NEXT | Minimal baseline fixes after audit. Recommended scope: safe saved-state parsing/validation, stale-response protection and focused regression checks. Not implemented; scope approval pending. |
-| P1 — Warm host UI | SG-P10 | PLANNED | Design tokens and responsive host shell/sidebar; explicitly after SG-P00/SG-P01. |
+| P0 | SG-P01 | DONE | Approved host-state reliability scope implemented: validated saved state with explicit recovery-copy reset, guarded loads/saves and focused regressions. Evidence above; awaiting user review. |
+| P1 — Warm host UI | SG-P10 | NEXT | Design tokens and responsive host shell/sidebar; explicitly after SG-P00/SG-P01. |
 | P1 | SG-P11 | PLANNED | Property tabs/cards/progress/actions using existing data; P0 gate applies; expected to build on SG-P10 shell. |
 | P1 | SG-P12 | PLANNED | Compact accessible editing panel; P0 gate applies; coordinate with SG-P10/SG-P11 and saved-state behavior. |
 | P2 — Guest UI and print | SG-P20 | PLANNED | Warm SSR guest layout; retain current guide model and non-JS reading. Confirm sequencing after baseline fixes. |
@@ -85,12 +86,12 @@ These summarize the existing task acceptance criteria; they do not replace detai
 ## Open blockers and major risks
 
 - **Production blocked:** temporary localStorage edit tokens, missing account recovery/revocation, trial expiry, abuse controls, billing verification, privacy/monitoring and tested restore remain launch gaps. Follow [SECURITY.md](SECURITY.md).
-- **Host reliability:** audit found unguarded saved-state parsing and a possible stale-response race on property switching. SG-P01 is recommended, not completed. Drawer focus handling remains an accessibility issue for a separately approved scope.
+- **Host reliability:** SG-P01 addresses invalid stored state and outdated load/save UI updates. Recovery copies remain private browser-local data and require technical help to restore; cross-tab concurrent edits and account recovery are not addressed. Drawer focus handling remains an accessibility issue for a separately approved scope.
 - **Public content privacy:** editor currently lacks explicit safeguards against private entry information; escaping is not confidentiality protection.
 - **Open decisions:** D-008–D-013 cover architecture/storage, translation cost/quotas, payment/tax viability, authentication/trial policy, name/domain conflict, PDF/photo policy and provisional discounts. No provider, purchase or architecture change is approved by this roadmap.
 - **Verification gaps:** no real Cloudflare/D1 smoke test, measured field performance, QR decoding, physical print verification or comprehensive accessibility/security review. User-confirmed local flows do not close these gates.
 - **Visual completeness:** reference photography, guest tiles/language switch, host sidebar and print workspace are targets, not implemented capabilities. Preserve speed and accessibility while approaching that direction.
-- **Repository review:** prior developer-experience changes and current governance work remain uncommitted; do not overwrite them or assume a push occurred.
+- **Repository review:** SG-P01 changes await user review and remain uncommitted; earlier developer-experience/governance work is tracked in the baseline. Do not assume a push occurred.
 
 ## Document responsibilities
 
