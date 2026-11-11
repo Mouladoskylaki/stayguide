@@ -206,17 +206,44 @@
 .empty-state small { display: block; font-size: var(--host-text-xs); margin-top: var(--host-space-5); color: var(--host-muted); overflow-wrap: anywhere; }
 #state-recovery .button { white-space: normal; }
 .drawer-open { overflow: hidden; }
-.drawer-overlay { position: fixed; inset: 0; z-index: 10; background: #20213280; }
-.editor-drawer { position: fixed; z-index: 11; right: 0; top: 0; height: 100%; width: min(450px, 100vw); background: var(--host-surface); box-shadow: -20px 0 60px #2021321c; padding: var(--host-space-6); overflow-y: auto; }
-.drawer-top { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--host-space-3); padding-bottom: var(--host-space-6); border-bottom: 1px solid var(--host-border); }
-.drawer-top h2 { margin: var(--host-space-3) 0 0; font-size: 1.5rem; letter-spacing: -.035em; }
+.editor-drawer {
+  position: fixed; inset: var(--editor-top, 0px) 0 auto auto;
+  margin: 0; width: min(500px, 100vw); max-width: 100vw;
+  height: var(--editor-height, 100dvh); max-height: none;
+  padding: 0; border: 0; color: var(--host-ink);
+  background: var(--host-surface); box-shadow: -20px 0 60px #2021321c;
+}
+.editor-drawer[open] { display: flex; flex-direction: column; }
+.editor-drawer::backdrop, .discard-dialog::backdrop { background: #171b2b80; }
+.drawer-top { flex: none; display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 28px 28px 24px; border-bottom: 1px solid var(--host-border); }
+.drawer-top h2 { margin: 10px 0 8px; font-size: 1.6rem; letter-spacing: -.035em; line-height: 1.2; }
+.drawer-top p { margin: 0; color: var(--host-muted); font-size: 14px; line-height: 1.5; }
 .close-icon { flex: none; border: 1px solid var(--host-border); background: var(--host-surface-soft); color: var(--host-ink); border-radius: var(--host-radius-sm); min-width: var(--host-touch); min-height: var(--host-touch); font-size: 1.5rem; }
-.form-field { margin-top: var(--host-space-6); }
-.form-field label { display: block; font-size: var(--host-text-sm); font-weight: 600; margin-bottom: var(--host-space-2); }
-.form-field input, .form-field textarea { width: 100%; display: block; border: 1px solid var(--host-border-strong); border-radius: var(--host-radius-sm); padding: var(--host-space-3); font-size: var(--host-text-base); color: var(--host-ink); background: var(--host-surface); line-height: 1.6; resize: vertical; }
-.form-field textarea { min-height: 8rem; }
-.field-tip { margin-top: var(--host-space-5); color: var(--host-muted); font-size: var(--host-text-xs); line-height: 1.7; }
-.drawer-bottom { display: flex; gap: var(--host-space-3); justify-content: flex-end; padding-top: var(--host-space-6); margin-top: var(--host-space-6); border-top: 1px solid var(--host-border); }
+#section-form { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.drawer-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 28px; }
+#drawer-fields { min-width: 0; padding: 0; margin: 0; border: 0; }
+.form-field + .form-field { margin-top: 24px; }
+.form-field label { display: block; font-size: var(--host-text-sm); font-weight: 600; margin-bottom: 8px; }
+.form-field input, .form-field textarea { width: 100%; min-height: 48px; display: block; border: 1px solid var(--host-border-strong); border-radius: var(--host-radius-sm); padding: 12px; font: inherit; font-size: 16px; color: var(--host-ink); background: var(--host-surface); line-height: 1.6; resize: vertical; }
+.form-field textarea { min-height: 10rem; }
+.field-tip { margin: 20px 0 0; color: var(--host-muted); font-size: 12px; line-height: 1.7; }
+.drawer-footer { flex: none; padding: 16px 28px max(20px, env(safe-area-inset-bottom)); border-top: 1px solid var(--host-border); background: var(--host-surface); }
+#editor-status { margin: 0; color: var(--host-muted); font-size: 13px; }
+#editor-status:not(:empty) { margin-bottom: 12px; }
+.drawer-bottom { display: flex; gap: 12px; justify-content: flex-end; }
+.editor-error { padding: 16px; border: 1px solid #d8aaaa; border-radius: var(--host-radius-sm); background: #fff5f3; color: #82332b; font-size: 14px; line-height: 1.6; }
+.discard-dialog { width: min(420px, calc(100vw - 32px)); max-width: none; padding: 28px; border: 1px solid var(--host-border); border-radius: var(--host-radius-lg); color: var(--host-ink); background: var(--host-surface); box-shadow: var(--host-shadow); }
+.discard-dialog h2 { margin: 0 0 12px; font-size: 1.4rem; letter-spacing: -.025em; }
+.discard-dialog p { color: var(--host-muted); font-size: 14px; line-height: 1.6; }
+.discard-actions { display: flex; flex-direction: column; gap: 10px; margin-top: 24px; }
+@media (max-width: 649px) {
+  .editor-drawer { width: 100vw; }
+  .drawer-top { padding: max(20px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) 20px max(20px, env(safe-area-inset-left)); }
+  .drawer-top h2 { font-size: 1.4rem; }
+  .drawer-scroll { padding: 24px max(20px, env(safe-area-inset-right)) 24px max(20px, env(safe-area-inset-left)); }
+  .drawer-footer { padding-left: max(20px, env(safe-area-inset-left)); padding-right: max(20px, env(safe-area-inset-right)); }
+  .drawer-bottom > .button { flex: 1; padding-inline: 12px; }
+}
 
 @media (min-width: 380px) {
   .editor-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -239,7 +266,7 @@
   .empty-state { padding: var(--host-space-10); }
   .create-input-row { flex-direction: row; }
   .create-input-row input { flex: 1; }
-  .editor-drawer { padding: var(--host-space-8); }
+
 }
 @media (min-width: 960px) {
   .dashboard-body { --host-header-height: 4.5rem; display: grid; grid-template-columns: var(--host-sidebar-width) minmax(0, 1fr); align-items: start; }

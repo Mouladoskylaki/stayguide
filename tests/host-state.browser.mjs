@@ -11,7 +11,7 @@ import {handleRequest} from '../src/worker.js';
 import {createLocalDb} from '../node/db.mjs';
 
 const root=new URL('../public/',import.meta.url);
-const artifacts=await fs.mkdtemp(path.join(os.tmpdir(),'sg-p11-browser-'));
+const artifacts=await fs.mkdtemp(path.join(os.tmpdir(),'sg-p12-browser-'));
 const baselineCss=execFileSync('git',['show','HEAD:public/styles.css'],{cwd:fileURLToPath(new URL('..',import.meta.url))});
 const db=createLocalDb();
 const server=http.createServer(async(req,res)=>{
@@ -263,6 +263,93 @@ try{
   assert.ok(await evaluate(`getComputedStyle(document.querySelector('.editor-card')).transitionDuration==='0s'`));
   await command('Emulation.setEmulatedMedia',{features:[]});
   await screenshot('host-tablet',768,1000);
+
+  console.log('Checking SG-P12 modal editor');
+  const key=async(key,shift=false)=>{
+    await command('Input.dispatchKeyEvent',{type:'keyDown',key,code:key,modifiers:shift?8:0,windowsVirtualKeyCode:key==='Tab'?9:27});
+    await command('Input.dispatchKeyEvent',{type:'keyUp',key,code:key,windowsVirtualKeyCode:key==='Tab'?9:27});
+  };
+  for(let i=0;i<10;i++){
+    await evaluate(`document.querySelectorAll('.editor-card')[${i}].click()`);
+    assert.ok(await evaluate("document.querySelector('#editor-drawer').open && document.activeElement.matches('input,textarea')"));
+    await evaluate("document.querySelector('#new-property').focus()");
+    assert.ok(await evaluate("document.querySelector('#editor-drawer').contains(document.activeElement)"));
+    await evaluate("document.querySelector('#save-editor').focus()");
+    await key('Tab');
+    assert.equal(await evaluate('document.activeElement.id'),'close-drawer');
+    await key('Tab',true);
+    assert.equal(await evaluate('document.activeElement.id'),'save-editor');
+    if(i%2)await key('Escape');else await evaluate("document.querySelector('#cancel-editor').click()");
+    assert.ok(await evaluate(`document.querySelector('#editor-drawer').hidden && document.activeElement===document.querySelectorAll('.editor-card')[${i}]`));
+  }
+  await evaluate("document.querySelectorAll('.editor-card')[0].click();window.originalWelcome=document.querySelector('#edit-welcome').value;document.querySelector('#edit-welcome').value='A thoughtful welcome.\\nMake yourself at home.'");
+  for(const width of [1440,390,320]){
+    // Open at the target width rather than capturing Chrome's top-layer resize repaint.
+    await evaluate("document.querySelector('#cancel-editor').click();document.querySelector('#discard-changes').click()");
+    await command('Emulation.setDeviceMetricsOverride',{width,height:width===1440?1000:844,deviceScaleFactor:1,mobile:false});
+    await evaluate("document.querySelectorAll('.editor-card')[0].click();document.querySelector('#edit-welcome').value='A thoughtful welcome.\\nMake yourself at home.'");
+    await screenshot('editor-open-'+width,width,width===1440?1000:844);
+    assert.ok(await evaluate(`(()=>{
+      const d=document.querySelector('#editor-drawer'),b=document.querySelector('#save-editor').getBoundingClientRect();
+      return d.scrollWidth<=d.clientWidth && b.bottom<=innerHeight && b.width>=44 && b.height>=44 &&
+        getComputedStyle(document.querySelector('#edit-property_name')).fontSize==='16px';
+    })()`));
+  }
+  // Actual keyboard commands on a reduced viewport; this emulates available space, not an OS keyboard.
+  await command('Emulation.setDeviceMetricsOverride',{width:320,height:400,deviceScaleFactor:1,mobile:false});
+  await evaluate("document.querySelector('#edit-welcome').style.height='700px';document.querySelector('#edit-welcome').focus();document.querySelector('.drawer-scroll').scrollTop=500");
+  assert.ok(await evaluate("document.querySelector('.drawer-scroll').scrollTop>0 && document.querySelector('#save-editor').getBoundingClientRect().bottom<=innerHeight"));
+  await evaluate("document.querySelector('#edit-welcome').style.height='';document.querySelector('#edit-welcome').value=window.originalWelcome;document.querySelector('#cancel-editor').click()");
+  assert.ok(await evaluate("document.querySelector('#editor-drawer').hidden && !document.querySelector('#discard-dialog').open"));
+  await evaluate("document.querySelectorAll('.editor-card')[0].click();document.querySelector('#edit-welcome').value='Unsaved welcome';document.querySelector('#close-drawer').click()");
+  assert.ok(await evaluate("document.querySelector('#discard-dialog').open && document.activeElement.id==='keep-editing'"));
+  await screenshot('editor-unsaved-320',320,844);
+  await key('Escape');
+  assert.ok(await evaluate("!document.querySelector('#discard-dialog').open && document.querySelector('#edit-welcome').value==='Unsaved welcome'"));
+  // Native backdrop pointer click opens the same dirty confirmation.
+  await command('Emulation.setDeviceMetricsOverride',{width:1440,height:1000,deviceScaleFactor:1,mobile:false});
+  await command('Input.dispatchMouseEvent',{type:'mousePressed',x:300,y:300,button:'left',clickCount:1});
+  await command('Input.dispatchMouseEvent',{type:'mouseReleased',x:300,y:300,button:'left',clickCount:1});
+  await waitFor("document.querySelector('#discard-dialog').open");
+  await evaluate("document.querySelector('#keep-editing').click()");
+  // Controlled failed response, then a slow retry. No guide credentials enter diagnostics.
+  await evaluate(`window.editorFetch=window.fetch;window.editorPatchCount=0;window.fetch=(url,init)=>{
+    if(init?.method==='PATCH'){window.editorPatchCount++;return Promise.resolve(new Response('{}',{status:503}));}
+    return window.editorFetch(url,init);
+  };document.querySelector('#section-form').requestSubmit()`);
+  await waitFor("!document.querySelector('#editor-error').hidden");
+  assert.ok(await evaluate("document.querySelector('#edit-welcome').value==='Unsaved welcome' && !document.querySelector('#save-editor').disabled && document.activeElement.id==='editor-error'"));
+  await screenshot('editor-error-390',390,844);
+  await evaluate(`window.fetch=(url,init)=>{
+    if(init?.method==='PATCH'){window.editorPatchCount++;return new Promise(resolve=>window.finishEditorSave=()=>window.editorFetch(url,init).then(resolve));}
+    return window.editorFetch(url,init);
+  };document.querySelector('#section-form').requestSubmit();document.querySelector('#section-form').dispatchEvent(new Event('submit',{cancelable:true}));`);
+  await key('Escape');
+  assert.ok(await evaluate("window.editorPatchCount===2 && document.querySelector('#editor-drawer').open && !document.querySelector('#discard-dialog').open && document.querySelector('#drawer-fields').disabled && document.activeElement.id==='editor-status'"));
+  await evaluate("window.finishEditorSave()");
+  await waitFor("document.querySelector('#editor-drawer').hidden");
+  assert.ok(await evaluate("document.activeElement.dataset.section==='welcome'"));
+  await evaluate("window.fetch=window.editorFetch");
+  // Explicit dirty discard leaves saved content intact.
+  await evaluate("document.querySelectorAll('.editor-card')[0].click();document.querySelector('#edit-welcome').value='Discard this';document.querySelector('#cancel-editor').click();document.querySelector('#discard-changes').click();document.querySelectorAll('.editor-card')[0].click()");
+  assert.equal(await evaluate("document.querySelector('#edit-welcome').value"),'Unsaved welcome');
+  await key('Escape');
+
+  for(const fail of [false,true]){
+    await evaluate(`document.querySelectorAll('.editor-card')[0].click();document.querySelector('#edit-welcome').value='Old property draft';
+      window.fetch=(url,init)=>{
+        if(init?.method==='PATCH')return new Promise(resolve=>window.releaseOldEditor=()=>${fail?"Promise.resolve(new Response('{}',{status:503})).then(resolve)":"window.editorFetch(url,init).then(resolve)"});
+        return window.editorFetch(url,init);
+      };document.querySelector('#section-form').requestSubmit();document.querySelectorAll('.property-tab')[0].click()`);
+    await waitFor("document.querySelector('#property-heading').textContent==='Olive Apartment'");
+    await evaluate("document.querySelectorAll('.editor-card')[1].click();document.querySelector('#edit-wifi_name').value='Current property draft';window.releaseOldEditor()");
+    await new Promise(r=>setTimeout(r,80));
+    assert.ok(await evaluate("document.querySelector('#property-heading').textContent==='Olive Apartment' && document.querySelector('#editor-drawer').open && document.querySelector('#edit-wifi_name').value==='Current property draft' && !document.querySelector('#save-editor').disabled && document.querySelector('#editor-error').hidden"));
+    await evaluate("window.fetch=window.editorFetch;document.querySelector('#cancel-editor').click();document.querySelector('#discard-changes').click();document.querySelectorAll('.property-tab')[1].click()");
+    await waitFor("document.querySelector('#property-heading').textContent==='Sea View Villa'");
+  }
+  console.log('PASS: ten editors, native inertness, Tab wrap/focus restore, Escape/Cancel/backdrop, exact dirty comparison/revert/discard, inline failure/retry, duplicate/slow save and reduced-height scrolling.');
+
   console.log('Checking unchanged shared pages');
   await unchangedPage('/', 'marketing-unchanged-desktop',1440,1000);
   await unchangedPage('/', 'marketing-unchanged-mobile',390,844);

@@ -200,7 +200,7 @@ function render(){
     b.setAttribute('data-section',sec.id);b.setAttribute('data-state',state);
     b.setAttribute('aria-label',`${sec.title}: ${label}. ${state==='empty'?'Add information':'Edit section'}`);
     b.innerHTML=`<span class="editor-icon">${sectionIcon(sec.id)}</span><span class="editor-card-copy"><strong>${esc(sec.title)}</strong><small>${esc(sec.hint)}</small></span><span class="editor-card-footer"><span class="editor-card-state">${label}</span><span class="editor-card-action">${state==='empty'?'Add':'Edit'} <span aria-hidden="true">→</span></span></span>`;
-    b.addEventListener('click',()=>openEditor(sec));grid.append(b);
+    b.addEventListener('click',()=>openEditor(sec,b));grid.append(b);
   }
   const progress=guideProgress(current);
   $('#progress-summary').textContent=`${progress.complete} of ${progress.total} sections complete`;
@@ -212,27 +212,112 @@ function render(){
   revealPropertyTab();
   setStatus('All changes saved');
 }
-function openEditor(section){
-  if(!current||storageProblem)return;
-  editorVersion++;
-  editing=section;$('#drawer-title').textContent=section.title;
-  $('#drawer-fields').innerHTML=section.fields.map(([key,label,type,hint])=>`<div class="form-field"><label for="edit-${key}">${esc(label)}</label>${type==='textarea'?`<textarea id="edit-${key}" name="${key}" placeholder="${esc(hint)}" rows="5">${esc(current[key]||'')}</textarea>`:`<input id="edit-${key}" name="${key}" type="text" value="${esc(current[key]||'')}" placeholder="${esc(hint)}">`}</div>`).join('')+`<p class="field-tip">Changes to this section are reflected instantly in the same guest link after saving.</p>`;
-  $('#editor-drawer').hidden=false;$('#drawer-overlay').hidden=false;$('#editor-drawer').querySelector('input,textarea')?.focus();
-  document.body.classList.add('drawer-open');
+// Context changes force-close the editor; user dismissal goes through requestEditorClose.
+let initialFields = {};
+let editorOpener = null;
+let editorSaving = false;
+function editorValues(){
+  const form=new FormData($('#section-form'));
+  return Object.fromEntries(editing.fields.map(([key])=>[key,String(form.get(key)||'')]));
 }
-function closeEditor(){editorVersion++;saveVersion++;editing=null;$('#editor-drawer').hidden=true;$('#drawer-overlay').hidden=true;document.body.classList.remove('drawer-open');$('#save-editor').disabled=false;$('#save-editor').textContent='Save changes';}
+function setEditorSaving(saving){
+  editorSaving=saving;
+  $('#drawer-fields').disabled=saving;
+  for(const id of ['save-editor','cancel-editor','close-drawer'])$('#'+id).disabled=saving;
+  $('#save-editor').textContent=saving?'Saving…':'Save changes';
+  $('#section-form').setAttribute('aria-busy',String(saving));
+  $('#editor-status').textContent=saving?'Saving your changes. Please wait.':'';
+  if(saving)$('#editor-status').focus({preventScroll:true});
+}
+function openEditor(section,opener){
+  if(!current||storageProblem||editing)return;
+  editorVersion++;
+  editing=section;editorOpener=opener;
+  initialFields=Object.fromEntries(section.fields.map(([key,,type])=>[key,type==='textarea'?String(current[key]||'').replace(/\r\n?/g,'\n'):String(current[key]||'').replace(/[\r\n]/g,'')]));
+  $('#drawer-title').textContent=section.title;
+  $('#drawer-description').textContent=section.hint;
+  $('#drawer-fields').innerHTML=section.fields.map(([key,label,type,hint])=>`<div class="form-field"><label for="edit-${key}">${esc(label)}</label>${type==='textarea'?`<textarea id="edit-${key}" name="${key}" placeholder="${esc(hint)}" rows="5">${esc(initialFields[key])}</textarea>`:`<input id="edit-${key}" name="${key}" type="text" value="${esc(initialFields[key])}" placeholder="${esc(hint)}" ${key==='property_name'?'required maxlength="80"':''}>`}</div>`).join('');
+  $('#editor-error').hidden=true;$('#editor-error').textContent='';
+  setEditorSaving(false);
+  const drawer=$('#editor-drawer');drawer.hidden=false;drawer.showModal();
+  drawer.querySelector('input,textarea')?.focus();
+  document.body.classList.add('drawer-open');
+  sizeEditor();
+}
+function closeEditor(restoreFocus=false){
+  const opener=editorOpener;
+  editorVersion++;saveVersion++;editing=null;editorOpener=null;
+  $('#discard-dialog').close();$('#discard-dialog').hidden=true;
+  $('#editor-drawer').close();$('#editor-drawer').hidden=true;
+  $('#drawer-overlay').hidden=true;
+  document.body.classList.remove('drawer-open');setEditorSaving(false);
+  if(restoreFocus&&opener?.isConnected)opener.focus({preventScroll:true});
+}
+function requestEditorClose(){
+  if(!editing||editorSaving)return;
+  const values=editorValues();
+  if(editing.fields.some(([key])=>values[key]!==initialFields[key])){
+    $('#discard-dialog').hidden=false;$('#discard-dialog').showModal();$('#keep-editing').focus();
+  }else closeEditor(true);
+}
+function keepEditing(){
+  $('#discard-dialog').close();$('#discard-dialog').hidden=true;
+}
+function sizeEditor(){
+  const viewport=globalThis.visualViewport;
+  if(viewport&&editing){
+    $('#editor-drawer').style.setProperty('--editor-height',viewport.height+'px');
+    $('#editor-drawer').style.setProperty('--editor-top',viewport.offsetTop+'px');
+  }
+}
+globalThis.visualViewport?.addEventListener('resize',sizeEditor);
+globalThis.visualViewport?.addEventListener('scroll',sizeEditor);
 $('#section-form').addEventListener('submit',async e=>{
-  e.preventDefault();if(!editing||!current||storageProblem)return;const form=new FormData(e.target);const patch={};for(const [key] of editing.fields)patch[key]=String(form.get(key)||'');
-  const entry=getEntry(),version=loadVersion,drawer=editorVersion;
-  const save=++saveVersion;
+  e.preventDefault();if(!editing||!current||storageProblem||editorSaving)return;
+  const patch=editorValues(),sectionId=editing.id;
+  if('property_name' in patch&&!patch.property_name.trim()){
+    $('#editor-error').textContent='Please enter a property name.';
+    $('#editor-error').hidden=false;$('#edit-property_name').focus();return;
+  }
+  const entry=getEntry(),version=loadVersion,drawer=editorVersion,save=++saveVersion;
   const isCurrent=()=>version===loadVersion&&entry.id===activeId&&drawer===editorVersion&&save===saveVersion&&!storageProblem;
-  const b=$('#save-editor');b.disabled=true;b.textContent='Saving…';
-  try{const d=await api(`/api/guides/${entry.id}`,{method:'PATCH',headers:{Authorization:`Bearer ${entry.token}`},body:JSON.stringify(patch)});if(!isCurrent())return;if(d.id!==entry.id)throw new Error('Could not save this guide.');current=d.guide;closeEditor();render();}
-  catch(err){if(isCurrent())alert(err.message);}
-  finally{if(save===saveVersion){b.disabled=false;b.textContent='Save changes';}}
+  $('#editor-error').hidden=true;setEditorSaving(true);
+  try{
+    const d=await api(`/api/guides/${entry.id}`,{method:'PATCH',headers:{Authorization:`Bearer ${entry.token}`},body:JSON.stringify(patch)});
+    if(!isCurrent())return;
+    if(d.id!==entry.id)throw new Error();
+    current=d.guide;closeEditor();render();
+    if(!storageProblem)$('#editor-grid').querySelector(`[data-section="${sectionId}"]`)?.focus({preventScroll:true});
+  }catch{
+    if(isCurrent()){
+      setEditorSaving(false);
+      $('#editor-error').textContent='Your changes couldn’t be saved. They are still here. Check your connection and choose Save changes to try again.';
+      $('#editor-error').hidden=false;$('#editor-error').focus();
+    }
+  }finally{if(save===saveVersion)setEditorSaving(false);}
 });
-$('#close-drawer').addEventListener('click',closeEditor);$('#cancel-editor').addEventListener('click',closeEditor);$('#drawer-overlay').addEventListener('click',closeEditor);
-document.addEventListener('keydown',e=>{if(e.key==='Escape'&&editing)closeEditor();});
+for(const id of ['close-drawer','cancel-editor','drawer-overlay'])$('#'+id).addEventListener('click',requestEditorClose);
+$('#editor-drawer').addEventListener('cancel',e=>{e.preventDefault();requestEditorClose();});
+// Require both ends of a pointer gesture outside the drawer, avoiding accidental dismissal after selecting text.
+let backdropPointer=false;
+$('#editor-drawer').addEventListener('pointerdown',e=>{backdropPointer=e.target===$('#editor-drawer')&&outsideDrawer(e);});
+$('#editor-drawer').addEventListener('click',e=>{if(backdropPointer&&e.target===$('#editor-drawer')&&outsideDrawer(e))requestEditorClose();backdropPointer=false;});
+function outsideDrawer(e){
+  const rect=$('#editor-drawer').getBoundingClientRect();
+  return e.clientX<rect.left||e.clientX>rect.right||e.clientY<rect.top||e.clientY>rect.bottom;
+}
+$('#keep-editing').addEventListener('click',keepEditing);
+$('#discard-changes').addEventListener('click',()=>closeEditor(true));
+$('#discard-dialog').addEventListener('cancel',e=>{e.preventDefault();keepEditing();});
+// Native modal dialogs make the background inert; explicitly wrap Tab at the boundaries.
+for(const id of ['editor-drawer','discard-dialog'])$('#'+id).addEventListener('keydown',e=>{
+  if(e.key!=='Tab')return;
+  const controls=[...$('#'+id).querySelectorAll('button,input,textarea,[tabindex]')].filter(el=>!el.matches(':disabled')&&el.tabIndex>=0&&el.getClientRects().length);
+  const first=controls[0],last=controls.at(-1);
+  if(!first){e.preventDefault();return;}
+  if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}
+  else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}
+});
 $('#create-form').addEventListener('submit',async e=>{
   e.preventDefault();const name=$('#first-name').value.trim();if(!name)return;
   const btn=$('#create-form button');btn.disabled=true;btn.textContent='Creating…';

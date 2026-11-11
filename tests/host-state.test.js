@@ -22,6 +22,8 @@ function dashboard(initial={},options={}){
     setAttribute(k,v){this.attributes[k]=String(v);}
     getAttribute(k){return this.attributes[k]??null;}
     removeAttribute(k){delete this.attributes[k];if(k==='href')delete this.href;}
+    showModal(){this.open=true;}
+    close(){this.open=false;}
     focus(){}
     click(){return this.listeners.click?.();}
   }
@@ -177,15 +179,55 @@ test('stale save completion does not unlock a newer save',async()=>{
   assert.equal(d.element('#save-editor').disabled,false);
   assert.equal(d.element('#property-heading').textContent,'Saved Beta');
 });
-test('a newer save in the same editor owns the resulting UI',async()=>{
+test('duplicate saves and dismissal are blocked until the pending save settles',async()=>{
   const d=await loaded();d.element('#editor-grid').children[1].click();
   const first=d.element('#section-form').listeners.submit({preventDefault(){},target:{}});
-  const second=d.element('#section-form').listeners.submit({preventDefault(){},target:{}});
-  d.requests[1].reply(response(a,'Older save'));await first;
-  assert.equal(d.element('#save-editor').disabled,true);
+  await d.element('#section-form').listeners.submit({preventDefault(){},target:{}});
+  d.element('#cancel-editor').click();
+  assert.equal(d.requests.length,2);
   assert.equal(d.element('#editor-drawer').hidden,false);
-  d.requests[2].reply(response(a,'Latest save'));await second;
-  assert.equal(d.element('#property-heading').textContent,'Latest save');
+  assert.equal(d.element('#save-editor').disabled,true);
+  d.requests[1].reply(response(a,'Saved once'));await first;
+  assert.equal(d.element('#property-heading').textContent,'Saved once');
+});
+test('unchanged fields close directly; edited and reverted values do not warn',async()=>{
+  const d=await loaded();d.element('#editor-grid').children[1].click();
+  d.options.form={wifi_name:'Alpha network'};
+  d.element('#cancel-editor').click();
+  assert.equal(d.element('#editor-drawer').hidden,true);
+  assert.notEqual(d.element('#discard-dialog').open,true);
+});
+test('dirty dismissal preserves values until explicit discard, including Escape',async()=>{
+  const d=await loaded();d.element('#editor-grid').children[1].click();
+  d.options.form={wifi_name:'Draft network'};
+  d.element('#editor-drawer').listeners.cancel({preventDefault(){}});
+  assert.equal(d.element('#discard-dialog').open,true);
+  d.element('#keep-editing').click();
+  assert.equal(d.element('#editor-drawer').hidden,false);
+  assert.equal(d.options.form.wifi_name,'Draft network');
+  d.element('#close-drawer').click();d.element('#discard-changes').click();
+  assert.equal(d.element('#editor-drawer').hidden,true);assert.equal(d.requests.length,1);
+});
+test('failed save retains draft, reports a sanitized inline error and permits retry',async()=>{
+  const d=await loaded();d.element('#editor-grid').children[1].click();
+  d.options.form={wifi_name:'Draft network'};
+  const first=d.element('#section-form').listeners.submit({preventDefault(){},target:{}});
+  d.requests[1].fail(Error('private response details'));await first;
+  assert.equal(d.element('#editor-drawer').hidden,false);
+  assert.equal(d.element('#editor-error').hidden,false);
+  assert.match(d.element('#editor-error').textContent,/try again/);
+  assert.ok(!d.element('#editor-error').textContent.includes('private'));
+  assert.equal(d.alerts.length,0);assert.equal(d.options.form.wifi_name,'Draft network');
+  assert.equal(d.element('#save-editor').disabled,false);
+  const retry=d.element('#section-form').listeners.submit({preventDefault(){},target:{}});
+  assert.equal(JSON.parse(d.requests[2].init.body).wifi_name,'Draft network');
+  d.requests[2].reply(response(a,'Saved retry'));await retry;
+  assert.equal(d.element('#editor-drawer').hidden,true);
+});
+test('blank property name receives inline validation without an API request',async()=>{
+  const d=await loaded();d.element('#editor-grid').children[0].click();d.options.form={property_name:'   '};
+  await d.element('#section-form').listeners.submit({preventDefault(){},target:{}});
+  assert.equal(d.requests.length,1);assert.equal(d.element('#editor-error').hidden,false);
 });
 
 const progressOf=(d,model)=>JSON.parse(d.run(`JSON.stringify(guideProgress(${JSON.stringify(model)}))`));
@@ -295,11 +337,20 @@ test('rejected drafts do not advance saved progress',async()=>{
   assert.equal(d.element('#progress-counts').textContent,'2 started · 8 empty');
 });
 test('a stale save cannot apply its more-complete progress to the current property',async()=>{
-  const d=await loaded();d.element('#editor-grid').children[0].click();
+  const d=await loaded();d.element('#editor-grid').children[0].click();d.options.form={property_name:'Alpha',welcome:'Draft'};
   const saving=d.element('#section-form').listeners.submit({preventDefault(){},target:{}});
   d.element('#property-tabs').children[1].click();
   d.requests[2].reply({id:b.id,guide:{property_name:'Beta',contact:'Saved contact'}});await tick();
   d.requests[1].reply({id:a.id,guide:{property_name:'Alpha',welcome:'Saved welcome',rules:'Saved rules',contact:'Saved contact'}});await saving;
   assert.equal(d.element('#progress-summary').textContent,'1 of 10 sections complete');
   assert.equal(d.element('#progress-counts').textContent,'1 started · 8 empty');
+});
+
+test('editor baseline normalizes browser line endings without losing multiline content',async()=>{
+  const d=await loaded();d.run("current.welcome='First line\\r\\nSecond line'");
+  d.element('#editor-grid').children[0].click();
+  assert.equal(d.run('initialFields.welcome'),'First line\nSecond line');
+  d.options.form={property_name:'Alpha',welcome:'First line\nSecond line'};
+  d.element('#cancel-editor').click();
+  assert.equal(d.element('#editor-drawer').hidden,true);
 });
