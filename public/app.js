@@ -71,7 +71,29 @@ $('#reset-state').addEventListener('click',()=>{
   }
 });
 function showEmpty(){ $('#empty-state').hidden=false;$('#editor-shell').hidden=true;}
-function showEditor(){ $('#empty-state').hidden=true;$('#editor-shell').hidden=false;}
+function showEditor(){ $('#empty-state').hidden=true;$('#editor-shell').hidden=false;revealPropertyTab();}
+function updatePropertyScroll(){
+  const host=$('#property-tabs');
+  if(!host.parentElement)return;
+  host.parentElement.dataset.scrollLeft=String(host.scrollLeft>1);
+  host.parentElement.dataset.scrollRight=String(host.scrollWidth-host.clientWidth-host.scrollLeft>1);
+}
+function revealPropertyTab(tab){
+  const host=$('#property-tabs');
+  if(!host.clientWidth)return; // Initial render can happen while the editor is hidden.
+  tab=tab||host.querySelector('.property-tab.active');
+  if(tab){
+    const viewport=host.getBoundingClientRect(),bounds=tab.getBoundingClientRect(),inset=14;
+    if(bounds.left<viewport.left+inset)host.scrollLeft+=bounds.left-viewport.left-inset;
+    else if(bounds.right>viewport.right-inset)host.scrollLeft+=bounds.right-viewport.right+inset;
+  }
+  updatePropertyScroll();
+}
+$('#property-tabs').addEventListener('scroll',updatePropertyScroll,{passive:true});
+$('#property-tabs').addEventListener('focusin',event=>{
+  if(event.target.classList.contains('property-tab'))revealPropertyTab(event.target);
+});
+if(typeof ResizeObserver!=='undefined')new ResizeObserver(()=>revealPropertyTab()).observe($('#property-tabs'));
 function setStatus(msg){ $('#save-status').textContent=msg; }
 async function api(path,options={}){
   const response=await fetch(path,{...options,headers:{'Content-Type':'application/json',...(options.headers||{})}});
@@ -106,7 +128,7 @@ async function loadActive(){
   }finally{if(isCurrent())$('#editor-shell').removeAttribute('aria-busy');}
 }
 function render(){
-  const host=$('#property-tabs');host.replaceChildren();
+  const host=$('#property-tabs'),restoreTabFocus=document.activeElement?.parentElement===host;host.replaceChildren();
   guides.forEach((g,index)=>{
     const b=document.createElement('button');b.type='button';b.className='property-tab'+(g.id===activeId?' active':'');b.textContent=g.id===activeId?current.property_name:(g.label||`Property ${index+1}`);b.addEventListener('click',()=>{activeId=g.id;if(persist())loadActive();});host.append(b);
   });
@@ -122,6 +144,8 @@ function render(){
     b.addEventListener('click',()=>openEditor(sec));grid.append(b);
   }
   $('#card-counter').textContent=`${done} of ${FIELDS.length} sections started`;
+  if(restoreTabFocus)host.querySelector('.property-tab.active')?.focus({preventScroll:true});
+  revealPropertyTab();
   setStatus('All changes saved');
 }
 function openEditor(section){
