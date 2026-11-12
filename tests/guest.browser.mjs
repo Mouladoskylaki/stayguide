@@ -86,10 +86,11 @@ export async function checkGuest({origin,db,artifacts,command,evaluate,navigate,
   await command('Emulation.setEmulatedMedia',{features:[]});
   const cwd=fileURLToPath(new URL('..',import.meta.url));
   const committed=file=>execFileSync('git',['show','HEAD:'+file],{cwd});
-  const source=committed('src/worker.js').toString().replace("'./qr.js'",JSON.stringify(new URL('../src/qr.js',import.meta.url).href));
+  const source=committed('src/worker.js').toString().replace("'./qr.js'",JSON.stringify(new URL('../src/qr.js',import.meta.url).href)).replace("'../public/qr-tools.js'",JSON.stringify(new URL('../public/qr-tools.js',import.meta.url).href));
   const baseline=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
   const before=await baseline.handleRequest(new Request(origin+full),{DB:db}),after=await fetch(origin+full);
-  const bytes={before:{html:Buffer.byteLength(await before.text()),css:committed('public/styles.css').length,js:committed('public/guest.js').length},after:{html:Buffer.byteLength(await after.text()),css:(await fs.readFile(new URL('../public/guest.css',import.meta.url))).length,js:(await fs.readFile(new URL('../public/guest.js',import.meta.url))).length}};
+  const beforeHtml=await before.text(),stylesheet=beforeHtml.match(/rel="stylesheet" href="\/([^"]+)"/)[1];
+  const bytes={before:{html:Buffer.byteLength(beforeHtml),css:committed('public/'+stylesheet).length,js:committed('public/guest.js').length},after:{html:Buffer.byteLength(await after.text()),css:(await fs.readFile(new URL('../public/guest.css',import.meta.url))).length,js:(await fs.readFile(new URL('../public/guest.js',import.meta.url))).length}};
   await fs.writeFile(path.join(artifacts,'guest-body-bytes.json'),JSON.stringify(bytes,null,2));
   console.log('Guest uncompressed response/asset bytes, same full guide: '+JSON.stringify(bytes));
   console.log('PASS: SG-P20 all sections/anchors, 1440/390/320 layouts, no-JS reading/navigation, clipboard success/denial/absence, empty/sparse/long/injection cases and reduced motion.');

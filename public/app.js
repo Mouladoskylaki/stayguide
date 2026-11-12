@@ -1,3 +1,4 @@
+import {previewWarning,qrFilename,qrPngBlob} from './qr-tools.js';
 const STORAGE = 'stayguide-demo-properties';
 const ACTIVE = 'stayguide-demo-active';
 const FIELDS = [
@@ -51,6 +52,8 @@ let storageProblem = false;
 let loadVersion = 0;
 let editorVersion = 0;
 let saveVersion = 0;
+let qrVersion = 0;
+let qrOpener = null;
 
 function showRecovery(){
   storageProblem=true;loadVersion++;current=null;closeEditor();clearGuidePresentation();
@@ -124,6 +127,10 @@ $('#property-tabs').addEventListener('focusin',event=>{
 });
 if(typeof ResizeObserver!=='undefined')new ResizeObserver(()=>revealPropertyTab()).observe($('#property-tabs'));
 function clearGuidePresentation(){
+  closeQr();
+  $('#open-qr').disabled=true;
+  $('#qr-preview').removeAttribute('src');$('#qr-destination').removeAttribute('href');
+  $('#qr-destination').textContent='';$('#qr-property-name').textContent='';
   $('#guide-progress').hidden=true;
   $('#progress-summary').textContent='';$('#progress-counts').textContent='';
   $('#section-progress').value=0;
@@ -193,6 +200,7 @@ function render(){
   $('#view-link').href=link;$('#download-qr').href=`/g/${activeId}/qr.svg`;$('#print-card').href=`/g/${activeId}/card`;
   for(const id of ['view-link','download-qr','print-card'])$('#'+id).removeAttribute('aria-disabled');
   $('#copy-link').disabled=false;$('#copy-link').textContent='Copy guest link';
+  $('#open-qr').disabled=false;$('#download-qr').download=qrFilename(current.property_name,'svg');
   const grid=$('#editor-grid');grid.replaceChildren();
   for(const sec of FIELDS){
     const state=sectionState(sec,current),label={empty:'Empty',started:'Started',complete:'Complete'}[state];
@@ -302,21 +310,76 @@ $('#editor-drawer').addEventListener('cancel',e=>{e.preventDefault();requestEdit
 let backdropPointer=false;
 $('#editor-drawer').addEventListener('pointerdown',e=>{backdropPointer=e.target===$('#editor-drawer')&&outsideDrawer(e);});
 $('#editor-drawer').addEventListener('click',e=>{if(backdropPointer&&e.target===$('#editor-drawer')&&outsideDrawer(e))requestEditorClose();backdropPointer=false;});
-function outsideDrawer(e){
-  const rect=$('#editor-drawer').getBoundingClientRect();
+function outsideDrawer(e,dialog=$('#editor-drawer')){
+  const rect=dialog.getBoundingClientRect();
   return e.clientX<rect.left||e.clientX>rect.right||e.clientY<rect.top||e.clientY>rect.bottom;
 }
 $('#keep-editing').addEventListener('click',keepEditing);
 $('#discard-changes').addEventListener('click',()=>closeEditor(true));
 $('#discard-dialog').addEventListener('cancel',e=>{e.preventDefault();keepEditing();});
 // Native modal dialogs make the background inert; explicitly wrap Tab at the boundaries.
-for(const id of ['editor-drawer','discard-dialog'])$('#'+id).addEventListener('keydown',e=>{
+for(const id of ['editor-drawer','discard-dialog','qr-workspace'])$('#'+id).addEventListener('keydown',e=>{
   if(e.key!=='Tab')return;
-  const controls=[...$('#'+id).querySelectorAll('button,input,textarea,[tabindex]')].filter(el=>!el.matches(':disabled')&&el.tabIndex>=0&&el.getClientRects().length);
+  const controls=[...$('#'+id).querySelectorAll('button,input,textarea,a[href],[tabindex]')].filter(el=>!el.matches(':disabled')&&el.tabIndex>=0&&el.getClientRects().length);
   const first=controls[0],last=controls.at(-1);
   if(!first){e.preventDefault();return;}
   if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}
   else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}
+});
+function closeQr(restoreFocus=false){
+  qrVersion++;
+  const opener=qrOpener;qrOpener=null;
+  $('#qr-workspace').close();$('#qr-workspace').hidden=true;
+  $('#download-png').disabled=false;$('#download-png').textContent='Download QR';
+  $('#qr-download-status').textContent='';$('#qr-download-error').hidden=true;
+  document.body.classList.remove('qr-open');
+  if(restoreFocus&&opener?.isConnected)opener.focus({preventScroll:true});
+}
+$('#open-qr').addEventListener('click',()=>{
+  if(!current||storageProblem)return;
+  qrOpener=$('#open-qr');qrVersion++;
+  $('#qr-property-name').textContent=current.property_name;
+  const link=location.origin+'/g/'+activeId;
+  $('#qr-destination').href=link;$('#qr-destination').textContent=link;
+  const warning=previewWarning(link);$('#qr-url-warning').textContent=warning;$('#qr-url-warning').hidden=!warning;
+  $('#qr-preview').src='/g/'+activeId+'/qr.svg';$('#qr-preview').alt='QR code for '+current.property_name+' guest guide';
+  $('#qr-workspace').hidden=false;$('#qr-workspace').showModal();
+  $('#qr-workspace .qr-workspace-body').scrollTop=0;
+  document.body.classList.add('qr-open');$('#close-qr').focus();
+});
+$('#close-qr').addEventListener('click',()=>closeQr(true));
+$('#qr-workspace').addEventListener('cancel',e=>{e.preventDefault();closeQr(true);});
+let qrBackdrop=false;
+$('#qr-workspace').addEventListener('pointerdown',e=>{qrBackdrop=e.target===$('#qr-workspace')&&outsideDrawer(e,$('#qr-workspace'));});
+$('#qr-workspace').addEventListener('click',e=>{if(qrBackdrop&&e.target===$('#qr-workspace')&&outsideDrawer(e,$('#qr-workspace')))closeQr(true);qrBackdrop=false;});
+$('#qr-preview').addEventListener('error',()=>{
+  if($('#qr-workspace').open&&$('#qr-preview').complete&&!$('#qr-preview').naturalWidth){
+    $('#qr-download-error').textContent='The QR preview couldn’t load. Close and reopen this workspace to retry, or open the welcome card.';$('#qr-download-error').hidden=false;
+  }
+});
+$('#download-png').addEventListener('click',async()=>{
+  if(!current||storageProblem||!$('#qr-workspace').open||$('#download-png').disabled)return;
+  const id=activeId,name=current.property_name,load=loadVersion,version=qrVersion;
+  const isCurrent=()=>current&&!storageProblem&&activeId===id&&load===loadVersion&&version===qrVersion&&$('#qr-workspace').open;
+  $('#download-png').disabled=true;$('#download-png').textContent='Preparing…';
+  $('#qr-download-error').hidden=true;$('#qr-download-status').textContent='Preparing your PNG image…';
+  try{
+    // Same-origin preview authentication may still apply; no owner-token header is attached.
+    const response=await fetch('/g/'+id+'/qr.svg',{credentials:'same-origin',cache:'no-store'});
+    if(!isCurrent())return;
+    if(!response.ok||!response.headers.get('Content-Type')?.includes('image/svg+xml'))throw new Error();
+    const svg=await response.text();if(!isCurrent())return;
+    const png=await qrPngBlob(svg);if(!isCurrent())return;
+    const url=URL.createObjectURL(png),link=document.createElement('a');
+    link.href=url;link.download=qrFilename(name,'png');document.body.append(link);link.click();link.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),1000);
+    $('#qr-download-status').textContent='Your PNG download is ready. If it didn’t save, try again or use SVG.';
+  }catch{
+    if(isCurrent()){
+      $('#qr-download-status').textContent='';$('#qr-download-error').textContent='Your QR image couldn’t be downloaded. Try Download QR again, or choose Download SVG.';
+      $('#qr-download-error').hidden=false;$('#qr-download-error').focus();
+    }
+  }finally{if(isCurrent()){$('#download-png').disabled=false;$('#download-png').textContent='Download QR';}}
 });
 $('#create-form').addEventListener('submit',async e=>{
   e.preventDefault();const name=$('#first-name').value.trim();if(!name)return;

@@ -1,4 +1,5 @@
 import {qrSvg} from './qr.js';
+import {previewWarning} from '../public/qr-tools.js';
 
 const KEYS = ['property_name','welcome','wifi_name','wifi_password','checkin','checkout','rules','appliances','parking','local_tips','emergency','contact','additional'];
 const LIMITS = { property_name:80, wifi_name:100, wifi_password:150, welcome:1500, checkin:800, checkout:800, rules:2000, appliances:2000, parking:1000, local_tips:2000, emergency:1000, contact:1000, additional:2000 };
@@ -70,7 +71,13 @@ function guestPage(id,model){
   <footer class="guest-foot">Enjoy your stay.</footer>
 </main><script src="/guest.js" defer></script></body></html>`;
 }
-function qrCard(id,model){const name=esc(model.property_name);return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>QR card · ${name}</title><link rel="stylesheet" href="/styles.css"></head><body class="print-body"><main class="print-card"><span class="eyebrow">WELCOME TO</span><h1>${name}</h1><p>Everything for your stay in one place.</p><img src="/g/${id}/qr.svg" width="220" height="220" alt="QR code for your guest guide"><p class="scan-text">Scan for Wi-Fi, house information & local tips</p></main><p class="print-help">Print using your browser · Save as PDF or print on paper</p></body></html>`;}
+function qrCard(id,model,target){
+  const name=esc(model.property_name),warning=previewWarning(target);
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Welcome card · ${name}</title><link rel="stylesheet" href="/print.css"></head><body class="print-body">
+  <header class="print-toolbar"><button type="button" id="print-welcome" hidden>Print / Save as PDF</button><p>Print using your browser · Save as PDF or print on paper</p><p>Single welcome card · A5 portrait · keep browser headers and footers off.</p><noscript>Use your browser’s Print command to print this card.</noscript></header>
+  ${warning?`<aside class="print-notice" role="note">${esc(warning)}</aside>`:''}
+  <main class="print-card${model.property_name.length>45||target.length>90?' print-card-long':''}"><p class="welcome-title">Welcome.</p><span class="card-eyebrow">MAKE YOURSELF AT HOME AT</span><h1>${name}</h1><p class="card-intro">A little guide to a lovely stay.</p><img src="/g/${id}/qr.svg" width="288" height="288" alt="QR code for your guest guide"><p class="scan-title">Scan. Settle in. Enjoy.</p><p class="card-description">Your host’s guide to a comfortable stay, right on your phone.</p><span class="card-url">${esc(target)}</span><footer class="card-brand">StayGuide<span aria-hidden="true">.</span></footer></main><script src="/print.js" defer></script></body></html>`;
+}
 export async function handleRequest(request,env){
   const url=new URL(request.url),path=url.pathname,method=request.method;
   try{
@@ -96,7 +103,7 @@ export async function handleRequest(request,env){
       const row=await lookup(env.DB,m[1]);if(!row)return html('<h1>Guide not found</h1>',404);
       const model=parseRow(row),target=new URL(`/g/${m[1]}`,url.origin).href;
       if(m[2]==='qr.svg')return new Response(qrSvg(target),{headers:{'Content-Type':'image/svg+xml; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','X-Robots-Tag':'noindex'}});
-      if(m[2]==='card')return html(qrCard(m[1],model));
+      if(m[2]==='card')return html(qrCard(m[1],model,target));
       return html(guestPage(m[1],model));
     }
     if(method==='GET'&&env.ASSETS)return env.ASSETS.fetch(request);

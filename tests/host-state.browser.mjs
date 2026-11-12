@@ -10,9 +10,10 @@ import assert from 'node:assert/strict';
 import {handleRequest} from '../src/worker.js';
 import {createLocalDb} from '../node/db.mjs';
 import {checkGuest} from './guest.browser.mjs';
+import {checkQrPrint} from './qr-print.browser.mjs';
 
 const root=new URL('../public/',import.meta.url);
-const artifacts=await fs.mkdtemp(path.join(os.tmpdir(),'sg-p20-browser-'));
+const artifacts=await fs.mkdtemp(path.join(os.tmpdir(),'sg-p21-browser-'));
 const baselineCss=execFileSync('git',['show','HEAD:public/styles.css'],{cwd:fileURLToPath(new URL('..',import.meta.url))});
 const db=createLocalDb();
 const server=http.createServer(async(req,res)=>{
@@ -22,7 +23,7 @@ const server=http.createServer(async(req,res)=>{
     const response=await handleRequest(request,{DB:db,ASSETS:{async fetch(request){
       let pathname=new URL(request.url).pathname;if(pathname==='/')pathname='/index.html';
       if(pathname==='/baseline.css')return new Response(baselineCss,{headers:{'Content-Type':'text/css'}});
-      if(!/^\/[a-z.]+$/.test(pathname))return new Response('Not found',{status:404});
+      if(!/^\/[a-z.-]+$/.test(pathname))return new Response('Not found',{status:404});
       try{
         const type=pathname.endsWith('.css')?'text/css':pathname.endsWith('.js')?'text/javascript':'text/html';
         return new Response(await fs.readFile(new URL(pathname.slice(1),root)),{headers:{'Content-Type':type}});
@@ -102,6 +103,18 @@ async function assertPropertySelector(){
       getComputedStyle(host).scrollbarWidth==='none' && host.offsetHeight===host.clientHeight &&
       document.documentElement.scrollWidth<=innerWidth;
   })()`),'Selected tab is fully visible, scrollbar hidden and add button reachable');
+}
+async function waitForPropertyStripLayout(){
+  // Closing a modal restores the page scrollbar. Let the application's pending
+  // ResizeObserver reveal the active tab before testing a separate manual scroll.
+  await evaluate(`new Promise(resolve=>{
+    const observer=new ResizeObserver(()=>{
+      observer.disconnect();
+      requestAnimationFrame(resolve);
+    });
+    observer.observe(document.querySelector('#property-tabs'));
+  })`);
+  await assertPropertySelector();
 }
 async function assertSavedProgress(complete,started,empty){
   assert.ok(await evaluate(`!document.querySelector('#guide-progress').hidden`));
@@ -197,7 +210,7 @@ try{
   await assertSavedProgress(2,2,6);
   assert.ok(await evaluate(`document.querySelectorAll('.editor-card').length===10 && document.querySelector('[data-section="wifi"]').dataset.state==='started' && document.querySelector('[data-section="arrival"]').dataset.state==='started' && document.querySelector('[data-section="welcome"]').dataset.state==='complete'`));
   assert.ok(await evaluate(`document.querySelectorAll('.property-tab .property-identity').length===2 && !document.querySelector('.property-tabs img') && document.querySelector('.property-tab.active').getAttribute('aria-pressed')==='true' && document.querySelector('#property-identity').textContent==='SV'`));
-  assert.ok(await evaluate(`document.querySelectorAll('#view-link').length===1 && document.querySelector('.guide-actions').children.length===4`));
+  assert.ok(await evaluate(`document.querySelectorAll('#view-link').length===1 && document.querySelector('.guide-actions').children.length===3`));
   console.log('Capturing responsive shell');
   await checkPropertySelector(1440,'host-desktop');
   assert.ok(await evaluate(`getComputedStyle(document.querySelector('.host-sidebar')).position==='sticky' && document.querySelector('.host-sidebar').getBoundingClientRect().width===232`));
@@ -230,6 +243,12 @@ try{
   await navigate('/app.html');await waitFor(`document.querySelectorAll('.property-tab').length===8`);
   await assertPropertySelector();
   await screenshot('property-tabs-many-320',320,844);
+  await evaluate("document.querySelector('#open-qr').click()");
+  await waitFor("document.querySelector('#qr-preview').complete && document.querySelector('#qr-preview').naturalWidth>0");
+  await screenshot('qr-workspace-long-name-320',320,844);
+  assert.ok(await evaluate("document.querySelector('#qr-property-name').textContent.length===80 && document.querySelector('#download-qr').download.length<=67 && !document.querySelector('#download-qr').download.includes('/')"));
+  await evaluate("document.querySelector('#close-qr').click()");
+  await waitForPropertyStripLayout();
   assert.ok(await evaluate(`document.querySelector('#property-tabs').scrollLeft>0&&document.querySelector('.property-strip').dataset.scrollLeft==='true'`));
   await evaluate(`document.querySelector('#property-tabs').scrollLeft=0`);
   await waitFor(`document.querySelector('.property-strip').dataset.scrollRight==='true'&&document.querySelector('.property-strip').dataset.scrollLeft==='false'`);
@@ -253,16 +272,17 @@ try{
   await evaluate(`document.querySelector('#copy-link').click()`);
   await waitFor(`document.querySelector('#copy-link').textContent.includes('Copied')`);
   assert.ok(await evaluate(`(async()=>await navigator.clipboard.readText()===document.querySelector('#view-link').href)()`));
-  await evaluate(`document.querySelector('#download-qr').click()`);
+  await evaluate(`document.querySelector('#open-qr').click();document.querySelector('#download-qr').click()`);
   let downloaded=false;
   for(let i=0;i<100;i++){
     const files=await fs.readdir(path.join(artifacts,'downloads')).catch(()=>[]);
-    if(files.includes('stayguide-qr.svg')){downloaded=true;break;}
+    if(files.includes('sea-view-villa-qr.svg')){downloaded=true;break;}
     await new Promise(resolve=>setTimeout(resolve,30));
   }
   assert.ok(downloaded,'QR download completes');
-  assert.ok((await fs.readFile(path.join(artifacts,'downloads/stayguide-qr.svg'),'utf8')).includes('<svg'));
+  assert.ok((await fs.readFile(path.join(artifacts,'downloads/sea-view-villa-qr.svg'),'utf8')).includes('<svg'));
   assert.ok(await evaluate(`document.querySelector('#print-card').getAttribute('href')===new URL(document.querySelector('#view-link').href).pathname+'/card'`));
+  await evaluate("document.querySelector('#close-qr').click()");
   // Native navigation/skip-link keyboard behavior and host reduced-motion styles.
   console.log('Checking keyboard and motion');
   await navigate('/app.html');
@@ -312,6 +332,8 @@ try{
   }
   // Actual keyboard commands on a reduced viewport; this emulates available space, not an OS keyboard.
   await command('Emulation.setDeviceMetricsOverride',{width:320,height:400,deviceScaleFactor:1,mobile:false});
+  // CDP resizing can finish before the visualViewport resize listener sizes the drawer.
+  await waitFor("document.querySelector('#editor-drawer').getBoundingClientRect().bottom<=innerHeight");
   await evaluate("document.querySelector('#edit-welcome').style.height='700px';document.querySelector('#edit-welcome').focus();document.querySelector('.drawer-scroll').scrollTop=500");
   assert.ok(await evaluate("document.querySelector('.drawer-scroll').scrollTop>0 && document.querySelector('#save-editor').getBoundingClientRect().bottom<=innerHeight"));
   await evaluate("document.querySelector('#edit-welcome').style.height='';document.querySelector('#edit-welcome').value=window.originalWelcome;document.querySelector('#cancel-editor').click()");
@@ -365,10 +387,10 @@ try{
   }
   console.log('PASS: ten editors, native inertness, Tab wrap/focus restore, Escape/Cancel/backdrop, exact dirty comparison/revert/discard, inline failure/retry, duplicate/slow save and reduced-height scrolling.');
 
+  await checkQrPrint({origin,artifacts,command,evaluate,navigate,screenshot,waitFor});
   console.log('Checking unchanged shared pages');
   await unchangedPage('/', 'marketing-unchanged-desktop',1440,1000);
   await unchangedPage('/', 'marketing-unchanged-mobile',390,844);
-  await unchangedPage(guest+'/card','print-unchanged',390,844,true);
   await navigate(guest);
   assert.ok(await evaluate(`document.body.textContent.includes('Villa Guest')`));
   await screenshot('guest-mobile',390,844);
@@ -387,7 +409,7 @@ try{
   assert.ok(await evaluate(`Object.keys(localStorage).some(k=>k.startsWith('stayguide-demo-recovery-')&&JSON.parse(localStorage.getItem(k)).properties==='{broken')`));
   assert.ok(await evaluate(`localStorage.getItem('stayguide-demo-properties')==='[]'&&!document.querySelector('#empty-state').hidden`));
   console.log('PASS: create, switching/stale responses, owner editing, clipboard, QR download, keyboard skip/focus, responsive navigation, reduced motion and recovery.');
-  console.log('PASS: marketing desktop/mobile and print screenshots identical with current vs committed shared CSS; JS-disabled guest rendered.');
+  console.log('PASS: marketing desktop/mobile screenshots identical with current vs committed shared CSS; JS-disabled guest rendered.');
   console.log('Screenshots: '+artifacts);
 }finally{
   try{await send('Browser.close');}catch{chrome.kill();}

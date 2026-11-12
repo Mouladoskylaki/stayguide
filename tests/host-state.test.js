@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import fs from 'node:fs';
 
-const source=fs.readFileSync(new URL('../public/app.js',import.meta.url),'utf8');
+const helpers=fs.readFileSync(new URL('../public/qr-tools.js',import.meta.url),'utf8').replaceAll('export ','');
+const source=helpers+'\n'+fs.readFileSync(new URL('../public/app.js',import.meta.url),'utf8').replace(/^import[^\n]+\n/,'');
 const STORAGE='stayguide-demo-properties',ACTIVE='stayguide-demo-active';
 const a={id:'a'.repeat(16),token:'a'.repeat(64)},b={id:'b'.repeat(16),token:'b'.repeat(64)};
 const response=(entry,name)=>({id:entry.id,guide:{property_name:name,wifi_name:name+' network'}});
@@ -35,7 +36,7 @@ function dashboard(initial={},options={}){
     setItem(key,value){if(options.writeFailure||writes.length===options.failAfter)throw Error('private storage details');values.set(key,String(value));writes.push(key);}
   };
   const context=vm.createContext({
-    document:{querySelector:element,createElement:()=>new Element(),body:new Element(),addEventListener(){}},
+    URL,document:{querySelector:element,createElement:()=>new Element(),body:new Element(),addEventListener(){}},
     localStorage,location:{origin:'http://localhost'},navigator:{clipboard:{writeText:options.writeClipboard||(async()=>{})}},
     confirm:()=>options.confirm!==false,alert:msg=>alerts.push(msg),prompt:msg=>prompts.push(msg),
     FormData:class {get(key){return options.form?.[key]??'';}},
@@ -353,4 +354,38 @@ test('editor baseline normalizes browser line endings without losing multiline c
   d.options.form={property_name:'Alpha',welcome:'First line\nSecond line'};
   d.element('#cancel-editor').click();
   assert.equal(d.element('#editor-drawer').hidden,true);
+});
+
+
+test('QR workspace uses the active property, safe filenames and a local-link warning',async()=>{
+  const d=await loaded();d.element('#open-qr').click();
+  assert.equal(d.element('#qr-workspace').open,true);
+  assert.equal(d.element('#qr-property-name').textContent,'Alpha');
+  assert.equal(d.element('#qr-destination').textContent,'http://localhost/g/'+a.id);
+  assert.equal(d.element('#qr-preview').src,'/g/'+a.id+'/qr.svg');
+  assert.equal(d.element('#download-qr').download,'alpha-qr.svg');
+  assert.equal(d.element('#qr-url-warning').hidden,false);
+  assert.match(d.element('#qr-url-warning').textContent,/unsuitable for permanent/);
+  d.element('#property-tabs').children[1].click();
+  assert.equal(d.element('#qr-workspace').hidden,true);assert.equal(d.element('#open-qr').disabled,true);
+  assert.equal(d.element('#qr-destination').textContent,'');
+  d.requests[1].reply(response(b,'Beta'));await tick();d.element('#open-qr').click();
+  assert.equal(d.element('#qr-property-name').textContent,'Beta');
+  assert.equal(d.element('#qr-destination').href,'http://localhost/g/'+b.id);
+});
+test('stale QR download completion cannot unlock or overwrite another property workspace',async()=>{
+  const d=await loaded();d.element('#open-qr').click();
+  const first=d.element('#download-png').click();
+  assert.equal(d.requests[1].path,'/g/'+a.id+'/qr.svg');
+  assert.equal(d.requests[1].init.credentials,'same-origin');assert.equal(d.requests[1].init.headers,undefined);
+  d.element('#property-tabs').children[1].click();d.requests[2].reply(response(b,'Beta'));await tick();
+  d.element('#open-qr').click();const second=d.element('#download-png').click();
+  d.requests[1].fail(Error('private old failure'));await first;
+  assert.equal(d.element('#download-png').disabled,true);
+  assert.equal(d.element('#qr-download-error').hidden,true);
+  assert.equal(d.element('#qr-property-name').textContent,'Beta');
+  d.requests[3].fail(Error('private current failure'));await second;
+  assert.equal(d.element('#download-png').disabled,false);
+  assert.equal(d.element('#qr-download-error').hidden,false);
+  assert.ok(!d.element('#qr-download-error').textContent.includes('private'));
 });

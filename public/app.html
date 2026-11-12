@@ -29,8 +29,7 @@
       <nav class="guide-actions" aria-label="Guest guide actions">
         <a id="view-link" target="_blank" rel="noopener" class="button button-primary" aria-label="Preview guest guide (opens in a new tab)">Preview guide</a>
         <button type="button" class="button button-secondary" id="copy-link">Copy guest link</button>
-        <a id="download-qr" class="button button-secondary" download="stayguide-qr.svg">↓ QR SVG</a>
-        <a id="print-card" class="button button-secondary" target="_blank" rel="noopener" aria-label="Print QR card (opens in a new tab)">Print QR card</a>
+        <button type="button" id="open-qr" class="button button-secondary" aria-haspopup="dialog">QR &amp; print</button>
       </nav>
     </section>
     <section class="guide-progress" id="guide-progress" aria-labelledby="progress-heading" hidden>
@@ -73,6 +72,17 @@
   <div class="discard-actions">
     <button type="button" id="keep-editing" class="button button-primary" autofocus>Keep editing</button>
     <button type="button" id="discard-changes" class="button button-secondary">Discard changes</button>
+  </div>
+</dialog>
+<dialog id="qr-workspace" class="qr-workspace" aria-labelledby="qr-title" aria-describedby="qr-property-name" hidden>
+  <header class="qr-workspace-head"><div><span class="eyebrow">A WARM WELCOME, ON PAPER</span><h2 id="qr-title">QR &amp; print</h2><p id="qr-property-name"></p></div><button type="button" id="close-qr" class="close-icon" aria-label="Close QR and print workspace">×</button></header>
+  <div class="qr-workspace-body">
+    <aside id="qr-url-warning" class="qr-warning" role="note" hidden></aside>
+    <div class="qr-workspace-grid">
+      <section class="qr-download-panel" aria-labelledby="qr-download-title"><h3 id="qr-download-title">A little code. A lovely stay.</h3><p>One scan opens your guest guide.</p><div class="qr-image-frame"><img id="qr-preview" width="288" height="288" alt="QR code for your guest guide"></div><span class="summary-label">EXACT DESTINATION</span><a id="qr-destination" target="_blank" rel="noopener"></a><div class="qr-download-actions"><button type="button" id="download-png" class="button button-primary">Download QR</button><a id="download-qr" class="button button-secondary" download>Download SVG</a></div><p class="qr-file-note">PNG image for printing · SVG for resizing</p><p id="qr-download-status" role="status" aria-live="polite"></p><p id="qr-download-error" class="editor-error" role="alert" tabindex="-1" hidden></p></section>
+      <section class="qr-card-panel" aria-labelledby="qr-card-title"><span class="qr-paper-icon" aria-hidden="true"><svg viewBox="0 0 48 56" width="48" height="56" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 2h23l9 9v43H8Z"/><path d="M31 2v10h9M15 20h18M15 25h12"/><rect x="16" y="33" width="6" height="6"/><rect x="26" y="33" width="6" height="6"/><path d="M16 44h6m4 0h6"/></svg></span><h3 id="qr-card-title">Welcome them in.</h3><p>A thoughtfully designed welcome card, ready for your property.</p><a id="print-card" class="button button-primary" target="_blank" rel="noopener" aria-label="Preview and print welcome card (opens in a new tab)">Preview &amp; print card <span aria-hidden="true">↗</span></a><p>Open the preview, then use your browser’s Print / Save as PDF.</p><div class="qr-placement"><h4>A good place for a warm welcome</h4><p>Place the card by the entrance or bedside, with good light and room to scan. Test the exact link on a guest’s phone before making permanent cards.</p></div></section>
+    </div>
+    <p class="qr-prototype-note">This is a working prototype. A permanent card needs a stable public guest URL.</p>
   </div>
 </dialog>
 <script type="module" src="/app.js"></script></body></html>

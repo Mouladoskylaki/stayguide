@@ -86,7 +86,7 @@ test('stable guest URLs, exact QR destination and existing print card are preser
   const qr=await call(guide.qr_url);assert.equal(qr.status,200);
   assert.equal(await qr.text(),qrSvg('https://stayguide.example'+guide.guide_url));
   const card=await call(guide.guide_url+'/card');assert.equal(card.status,200);
-  const page=await card.text();assert.match(page,/href="\/styles.css"/);assert.match(page,/Print using your browser/);
+  const page=await card.text();assert.match(page,/href="\/print.css"/);assert.match(page,/Print using your browser/);
   assert.ok(!page.includes('guest.css'));assert.equal(page.includes(guide.token),false);
 });
 
