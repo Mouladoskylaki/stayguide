@@ -20,3 +20,15 @@ Contrast, focus rings, 44px-ish tap targets, reduced motion, keyboard support, s
 
 ## Verification
 At each UI milestone capture screenshots at mobile (~390px) and desktop (~1440px), plus guest mobile; inspect against mockups. Mark mockups as aspirational; do not claim they are screenshots of the running product.
+
+## SG-UX-01 — owner-approved workspace and future book direction
+
+Authorized 2026-11-13: the host is a compact workspace. Remove the introductory marketing hero and redundant slogans; group property identity, saved state, existing actions and ten editing cards in one surface. Keep the navy sidebar, warm off-white background, restrained violet, local line icons and initials in place of mandatory photos. Desktop saved-content progress sits beside the section grid at about 280px; below desktop it follows the editing controls with a native expandable checklist. Keep status text as well as color and preserve progress semantics. The two owner-supplied dashboard/print mockups guide hierarchy, not additional features, fake navigation, photos or eight-section progress.
+
+The QR workspace distinguishes Guest Guide QR (actual PNG/SVG downloads) and the existing A5 Welcome QR Card (native preview/Print/Save as PDF). Its selected-property miniature is labelled a layout preview; the full-size existing card remains authoritative. Do not embed the card route in a frame or relax its frame-ancestors protection. No Welcome Book action until separate SG-P22 integration approval.
+
+For future SG-P22 integration, the owner agrees to minimal premium design: an elegant cover, readable typography, recognizable section icons, distinct Wi-Fi credentials, clear arrival/departure information, good spacing/hierarchy, attractive A4/A5 layouts and realistic distinct content. Match the host visual identity; keep Unicode stress fixtures separate from presentation examples. This records visual direction only. It does not select production dependencies/fonts, settle privacy/script/device policy, close D-013 or authorize integration; SG-P22-POC-R1 artifacts remain untouched by SG-UX-01.
+
+### SG-UX-01-R1 final refinements — 2026-11-14
+
+Preserve the compact workspace approved in principle. Keep one clearly labelled Add a property button in the top bar; remove the property-strip plus and sidebar slogan. Cards and saved-progress rows use the same decorative marks: Empty = small neutral outlined circle, Started = small solid amber circle, Complete = green checkmark. Retain readable state labels and accessible descriptions; colors/glyphs do not change completion semantics. Keep native scrolling property tabs with edge overflow cues, full selected-tab bounds, full name in accessible label/title and wrapped selected-property heading. Long tab labels may ellipsize within those bounds. No dropdown or navigation redesign.

@@ -26,6 +26,7 @@ const SECTION_ICONS = {
   contact:'<path d="M7 3H4a1 1 0 0 0-1 1c0 9 8 17 17 17a1 1 0 0 0 1-1v-3l-5-2-2 2a15 15 0 0 1-7-7l2-2Z"/>',
   additional:'<circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10h.01"/>'
 };
+const sectionStatusMark=state=>`<span class="section-state-mark" aria-hidden="true">${state==='complete'?'✓':''}</span>`;
 const sectionIcon=id=>`<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${SECTION_ICONS[id]}</svg>`;
 function propertyInitials(name){
   const words=String(name||'').trim().split(/\s+/).filter(Boolean);
@@ -43,6 +44,10 @@ function guideProgress(model){
   return counts;
 }
 const $ = selector => document.querySelector(selector);
+// Native disclosure stays compact below editing on small screens.
+const progressLayout=typeof matchMedia==='function'?matchMedia('(min-width: 1200px)'):null;
+const updateProgressLayout=()=>{$('#progress-checklist-details').open=!!progressLayout?.matches;};
+updateProgressLayout();progressLayout?.addEventListener('change',updateProgressLayout);
 const esc = v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let guides = [];
 let current = null;
@@ -133,7 +138,8 @@ function clearGuidePresentation(){
   $('#qr-destination').textContent='';$('#qr-property-name').textContent='';
   $('#guide-progress').hidden=true;
   $('#progress-summary').textContent='';$('#progress-counts').textContent='';
-  $('#section-progress').value=0;
+  $('#section-progress').value=0;$('#progress-checklist').replaceChildren();
+  $('#card-preview-name').textContent='';$('#card-preview-qr').removeAttribute('src');
   $('#property-identity').textContent='·';$('#property-identity').removeAttribute('data-tone');
   $('#card-counter').textContent='Loading sections…';
   for(const id of ['view-link','download-qr','print-card']){
@@ -207,8 +213,15 @@ function render(){
     const b=document.createElement('button');b.type='button';b.className='editor-card';
     b.setAttribute('data-section',sec.id);b.setAttribute('data-state',state);
     b.setAttribute('aria-label',`${sec.title}: ${label}. ${state==='empty'?'Add information':'Edit section'}`);
-    b.innerHTML=`<span class="editor-icon">${sectionIcon(sec.id)}</span><span class="editor-card-copy"><strong>${esc(sec.title)}</strong><small>${esc(sec.hint)}</small></span><span class="editor-card-footer"><span class="editor-card-state">${label}</span><span class="editor-card-action">${state==='empty'?'Add':'Edit'} <span aria-hidden="true">→</span></span></span>`;
+    b.innerHTML=`<span class="editor-icon">${sectionIcon(sec.id)}</span><span class="editor-card-copy"><strong>${esc(sec.title)}</strong><small>${esc(sec.hint)}</small></span><span class="editor-card-footer"><span class="editor-card-state">${sectionStatusMark(state)}${label}</span><span class="editor-card-action">${state==='empty'?'Add':'Edit'} <span aria-hidden="true">→</span></span></span>`;
     b.addEventListener('click',()=>openEditor(sec,b));grid.append(b);
+  }
+  const checklist=$('#progress-checklist');checklist.replaceChildren();
+  for(const sec of FIELDS){
+    const state=sectionState(sec,current),item=document.createElement('li');
+    item.setAttribute('data-section',sec.id);item.setAttribute('data-state',state);
+    item.innerHTML=`${sectionStatusMark(state)}<span>${esc(sec.title)}</span><small>${{complete:'Complete',started:'Started',empty:'Empty'}[state]}</small>`;
+    checklist.append(item);
   }
   const progress=guideProgress(current);
   $('#progress-summary').textContent=`${progress.complete} of ${progress.total} sections complete`;
@@ -339,6 +352,7 @@ $('#open-qr').addEventListener('click',()=>{
   if(!current||storageProblem)return;
   qrOpener=$('#open-qr');qrVersion++;
   $('#qr-property-name').textContent=current.property_name;
+  $('#card-preview-name').textContent=current.property_name;$('#card-preview-qr').src='/g/'+activeId+'/qr.svg';
   const link=location.origin+'/g/'+activeId;
   $('#qr-destination').href=link;$('#qr-destination').textContent=link;
   const warning=previewWarning(link);$('#qr-url-warning').textContent=warning;$('#qr-url-warning').hidden=!warning;
@@ -388,7 +402,7 @@ $('#create-form').addEventListener('submit',async e=>{
   catch(err){alert(err.message);}finally{btn.disabled=false;btn.textContent='Create my guide ↗';}
 });
 function newProperty(){if(storageProblem)return;loadVersion++;current=null;closeEditor();showEmpty();$('#first-name').focus();}
-$('#new-property').addEventListener('click',newProperty);$('#add-tab').addEventListener('click',newProperty);
+$('#new-property').addEventListener('click',newProperty);
 $('#copy-link').addEventListener('click',async()=>{
   if(!current||storageProblem)return;
   const id=activeId,version=loadVersion,link=`${location.origin}/g/${id}`;

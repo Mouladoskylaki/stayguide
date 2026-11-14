@@ -29,3 +29,11 @@ Only mark a decision fixed after explicit user approval. The owner explicitly ap
 | D-018 | Open | Proposed indexable editorial `/guides/` architecture/content research, separate from noindex `/g/:id`; SG-SEO-01 requires separate authorization, verified evidence and human publication approval. SG-P50 retains implementation/publication scope; Search Console access/workflow not approved. |
 
 Existing D-001–D-013 remain unchanged. SG-DOC02 selects no PDF technology, provider, storage, new price, subscription structure or volume discount. The €1/property/year direction remains provisional pending payment/tax, hosting/storage, translation, PDF, support/maintenance and demand verification; no commercial evidence is invented.
+
+## SG-UX-01 — limited visual-direction approval (2026-11-13)
+
+| ID | Status | Decision / boundary |
+|---|---|---|
+| D-019 | Fixed — owner-authorized SG-UX-01 direction | Compact host workspace, coherent property header/actions/ten-section editing surface, truthful saved-data progress alongside on desktop and after editing on mobile, warm restrained visual identity and clearer existing QR/card outputs. Future A4/A5 book direction is minimal/premium with readable type, icons, distinct Wi-Fi, clear arrival/departure, good spacing and realistic content. See [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md#sg-ux-01--owner-approved-workspace-and-future-book-direction). This is visual direction and the bounded SG-UX-01 implementation authorization; final visual acceptance, PDF integration, technology/font/privacy/browser choices and D-013 remain separate. |
+
+2026-11-14, SG-UX-01-R1: the owner reports successful interaction testing of the actual local application and approves the overall dashboard direction in principle. They explicitly authorize only the final refinement scope in [IMPLEMENTATION_TASKS.md](IMPLEMENTATION_TASKS.md#sg-ux-01-r1--final-dashboard-polish-owner-authorized-2026-11-14): one labelled Add button, no sidebar slogan, consistent outlined/solid/check status marks and stronger mobile/layout regression coverage. This is not final R1 acceptance, commit/push/deployment or next-task/PDF integration approval.

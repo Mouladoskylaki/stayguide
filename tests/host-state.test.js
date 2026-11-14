@@ -389,3 +389,17 @@ test('stale QR download completion cannot unlock or overwrite another property w
   assert.equal(d.element('#qr-download-error').hidden,false);
   assert.ok(!d.element('#qr-download-error').textContent.includes('private'));
 });
+
+test('SG-UX-01 checklist mirrors saved section states and clears on property switch',async()=>{
+  const d=await loaded();
+  const checklist=d.element('#progress-checklist').children,cards=d.element('#editor-grid').children;
+  assert.equal(checklist.length,10);
+  checklist.forEach((row,i)=>{assert.equal(row.getAttribute('data-section'),cards[i].getAttribute('data-section'));assert.equal(row.getAttribute('data-state'),cards[i].getAttribute('data-state'));});
+  assert.match(checklist[0].innerHTML,/Started/);assert.match(checklist[2].innerHTML,/Empty/);
+  d.element('#open-qr').click();assert.equal(d.element('#card-preview-name').textContent,'Alpha');
+  assert.equal(d.element('#card-preview-qr').src,d.element('#qr-preview').src);
+  d.element('#property-tabs').children[1].click();
+  assert.equal(d.element('#progress-checklist').children.length,0);
+  assert.equal(d.element('#card-preview-name').textContent,'');
+  assert.equal(d.element('#card-preview-qr').getAttribute('src'),null);
+});

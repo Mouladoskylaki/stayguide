@@ -11,9 +11,12 @@ import {handleRequest} from '../src/worker.js';
 import {createLocalDb} from '../node/db.mjs';
 import {checkGuest} from './guest.browser.mjs';
 import {checkQrPrint} from './qr-print.browser.mjs';
+import {checkHostWorkspace} from './host-workspace.browser.mjs';
 
 const root=new URL('../public/',import.meta.url);
-const artifacts=await fs.mkdtemp(path.join(os.tmpdir(),'sg-p21-browser-'));
+const artifacts=process.env.SG_BROWSER_ARTIFACTS?path.resolve(process.env.SG_BROWSER_ARTIFACTS):await fs.mkdtemp(path.join(os.tmpdir(),'sg-p21-browser-'));
+await fs.mkdir(artifacts,{recursive:true});
+console.log('Artifacts: '+artifacts);
 const baselineCss=execFileSync('git',['show','HEAD:public/styles.css'],{cwd:fileURLToPath(new URL('..',import.meta.url))});
 const db=createLocalDb();
 const server=http.createServer(async(req,res)=>{
@@ -22,6 +25,9 @@ const server=http.createServer(async(req,res)=>{
     const request=new Request(origin+req.url,{method:req.method,headers:req.headers,body:chunks.length?Buffer.concat(chunks):undefined});
     const response=await handleRequest(request,{DB:db,ASSETS:{async fetch(request){
       let pathname=new URL(request.url).pathname;if(pathname==='/')pathname='/index.html';
+      if(pathname==='/baseline-app.html')return new Response(baselineAppHtml,{headers:{'Content-Type':'text/html'}});
+      if(pathname==='/baseline-app.js')return new Response(baselineAppJs,{headers:{'Content-Type':'text/javascript'}});
+      if(pathname==='/baseline-host.css')return new Response(baselineHostCss,{headers:{'Content-Type':'text/css'}});
       if(pathname==='/baseline.css')return new Response(baselineCss,{headers:{'Content-Type':'text/css'}});
       if(!/^\/[a-z.-]+$/.test(pathname))return new Response('Not found',{status:404});
       try{
@@ -96,10 +102,10 @@ async function screenshot(name,width,height){
 }
 async function assertPropertySelector(){
   assert.ok(await evaluate(`(()=>{
-    const host=document.querySelector('#property-tabs'),tab=host.querySelector('.active'),add=document.querySelector('#add-tab');
+    const host=document.querySelector('#property-tabs'),tab=host.querySelector('.active'),add=document.querySelector('#new-property');
     const viewport=host.getBoundingClientRect(),selected=tab.getBoundingClientRect(),button=add.getBoundingClientRect();
     return selected.left>=viewport.left+13 && selected.right<=viewport.right-13 &&
-      selected.right<button.left && button.right<=innerWidth && button.width>=44 && button.height>=44 &&
+      !document.querySelector('#add-tab') && button.left>=0 && button.right<=innerWidth && button.width>=44 && button.height>=44 &&
       getComputedStyle(host).scrollbarWidth==='none' && host.offsetHeight===host.clientHeight &&
       document.documentElement.scrollWidth<=innerWidth;
   })()`),'Selected tab is fully visible, scrollbar hidden and add button reachable');
@@ -211,6 +217,7 @@ try{
   assert.ok(await evaluate(`document.querySelectorAll('.editor-card').length===10 && document.querySelector('[data-section="wifi"]').dataset.state==='started' && document.querySelector('[data-section="arrival"]').dataset.state==='started' && document.querySelector('[data-section="welcome"]').dataset.state==='complete'`));
   assert.ok(await evaluate(`document.querySelectorAll('.property-tab .property-identity').length===2 && !document.querySelector('.property-tabs img') && document.querySelector('.property-tab.active').getAttribute('aria-pressed')==='true' && document.querySelector('#property-identity').textContent==='SV'`));
   assert.ok(await evaluate(`document.querySelectorAll('#view-link').length===1 && document.querySelector('.guide-actions').children.length===3`));
+  await checkHostWorkspace({artifacts,command,evaluate,navigate,screenshot,waitFor});
   console.log('Capturing responsive shell');
   await checkPropertySelector(1440,'host-desktop');
   assert.ok(await evaluate(`getComputedStyle(document.querySelector('.host-sidebar')).position==='sticky' && document.querySelector('.host-sidebar').getBoundingClientRect().width===232`));
@@ -241,24 +248,37 @@ try{
     localStorage.setItem('stayguide-demo-active',entries.at(-1).id);
   })()`);
   await navigate('/app.html');await waitFor(`document.querySelectorAll('.property-tab').length===8`);
-  await assertPropertySelector();
-  await screenshot('property-tabs-many-320',320,844);
-  await evaluate("document.querySelector('#open-qr').click()");
-  await waitFor("document.querySelector('#qr-preview').complete && document.querySelector('#qr-preview').naturalWidth>0");
-  await screenshot('qr-workspace-long-name-320',320,844);
-  assert.ok(await evaluate("document.querySelector('#qr-property-name').textContent.length===80 && document.querySelector('#download-qr').download.length<=67 && !document.querySelector('#download-qr').download.includes('/')"));
-  await evaluate("document.querySelector('#close-qr').click()");
-  await waitForPropertyStripLayout();
-  assert.ok(await evaluate(`document.querySelector('#property-tabs').scrollLeft>0&&document.querySelector('.property-strip').dataset.scrollLeft==='true'`));
-  await evaluate(`document.querySelector('#property-tabs').scrollLeft=0`);
-  await waitFor(`document.querySelector('.property-strip').dataset.scrollRight==='true'&&document.querySelector('.property-strip').dataset.scrollLeft==='false'`);
-  const wheelPoint=await evaluate(`(()=>{const box=document.querySelector('#property-tabs').getBoundingClientRect();return {x:box.x+box.width/2,y:box.y+box.height/2}})()`);
-  await command('Input.dispatchMouseEvent',{type:'mouseWheel',...wheelPoint,deltaX:100,deltaY:0});
-  await waitFor(`document.querySelector('#property-tabs').scrollLeft>0`);
-  await evaluate(`document.querySelector('.property-tab.active').focus()`);await assertPropertySelector();
+  for(const width of [390,320]){
+    await screenshot('property-tabs-many-'+width,width,844);
+    await assertPropertySelector();
+    await evaluate("document.querySelector('#open-qr').click()");
+    await waitFor("document.querySelector('#qr-preview').complete && document.querySelector('#qr-preview').naturalWidth>0");
+    if(width===320)await screenshot('qr-workspace-long-name-320',320,844);
+    assert.ok(await evaluate("document.querySelector('#qr-property-name').textContent.length===80 && document.querySelector('#download-qr').download.length<=67 && !document.querySelector('#download-qr').download.includes('/')"));
+    await evaluate("document.querySelector('#close-qr').click()");
+    await waitForPropertyStripLayout();
+    assert.ok(await evaluate(`document.querySelector('#property-tabs').scrollLeft>0&&document.querySelector('.property-strip').dataset.scrollLeft==='true'&&getComputedStyle(document.querySelector('.property-strip'),'::before').opacity==='1'`));
+    await evaluate(`document.querySelector('#property-tabs').scrollLeft=0`);
+    await waitFor(`document.querySelector('.property-strip').dataset.scrollRight==='true'&&document.querySelector('.property-strip').dataset.scrollLeft==='false'`);
+    assert.ok(await evaluate("getComputedStyle(document.querySelector('.property-strip'),'::after').opacity==='1'"));
+    const wheelPoint=await evaluate(`(()=>{const box=document.querySelector('#property-tabs').getBoundingClientRect();return {x:box.x+box.width/2,y:box.y+box.height/2}})()`);
+    await command('Input.dispatchMouseEvent',{type:'mouseWheel',...wheelPoint,deltaX:100,deltaY:0});
+    await waitFor(`document.querySelector('#property-tabs').scrollLeft>0`);
+    // Native Tab reaches the next property, and Enter changes selection.
+    await evaluate("document.querySelector('.property-tab').focus()");
+    for(const type of ['keyDown','keyUp'])await command('Input.dispatchKeyEvent',{type,key:'Tab',code:'Tab',windowsVirtualKeyCode:9});
+    assert.ok(await evaluate("document.activeElement===document.querySelectorAll('.property-tab')[1]"));
+    for(const type of ['keyDown','keyUp'])await command('Input.dispatchKeyEvent',{type,key:'Enter',code:'Enter',windowsVirtualKeyCode:13,...(type==='keyDown'?{text:'\r'}:{})});
+    await waitFor("document.querySelector('#property-heading').textContent==='Sea View Villa' && document.querySelector('#save-status').textContent==='All changes saved'");
+    await assertPropertySelector();
+    await evaluate("document.querySelectorAll('.property-tab')[7].focus()");
+    for(const type of ['keyDown','keyUp'])await command('Input.dispatchKeyEvent',{type,key:'Enter',code:'Enter',windowsVirtualKeyCode:13,...(type==='keyDown'?{text:'\r'}:{})});
+    await waitFor("document.querySelector('#property-heading').textContent.length===80 && document.querySelector('#save-status').textContent==='All changes saved'");
+    await assertPropertySelector();
+  }
   await evaluate(`localStorage.setItem('stayguide-demo-properties',localStorage.getItem('__tabs-original-properties'));localStorage.setItem('stayguide-demo-active',localStorage.getItem('__tabs-original-active'));localStorage.removeItem('__tabs-original-properties');localStorage.removeItem('__tabs-original-active')`);
   await navigate('/app.html');await waitFor(`document.querySelector('#property-heading').textContent==='Sea View Villa'`);
-  console.log('PASS: selector resize/reload/click/keyboard at 1440/390/320, many/long tabs, wheel scrolling/cues, visible add button and narrow editor cards.');
+  console.log('PASS: selector resize/reload/click/keyboard at 1440/390/320, many/long tabs, wheel scrolling/cues, one labelled add button, 320/390px overflow cues/native Tab/Enter and narrow editor cards.');
   await assertSavedProgress(2,2,6);
   await evaluate(`document.querySelector('.progress-help').open=true`);
   await evaluate(`document.querySelector('#guide-progress').scrollIntoView({block:'start',behavior:'instant'})`);

@@ -11,20 +11,20 @@
     <a href="/app.html" aria-current="page"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>My properties</a>
     <a href="/"><span aria-hidden="true">←</span>Home</a>
   </nav>
-  <p class="sidebar-note">A little care.<br>A lovely stay.</p>
 </aside>
 <div class="host-workspace">
-<header class="app-header"><span class="workspace-label">Your properties</span><span class="app-pill">Working prototype</span></header>
-<main class="app-main" id="dashboard-main" tabindex="-1"><div class="dashboard-intro"><div><span class="eyebrow">YOUR WELCOME SPACE</span><h1>Make yourself at home.</h1><p>One lovely guide for every place you host.</p></div><button class="button button-secondary" id="new-property">＋ Add a property</button></div>
+<header class="app-header"><h1 class="workspace-label">My properties</h1><div class="workspace-tools"><span class="app-pill">Working prototype</span><button type="button" class="button button-secondary" id="new-property">＋ Add a property</button></div></header>
+<main class="app-main" id="dashboard-main" tabindex="-1">
 <section id="state-recovery" class="empty-state" aria-labelledby="recovery-title" hidden><h2 id="recovery-title">Your saved property list needs attention.</h2><p id="recovery-message" role="status">We could not read this browser’s saved property list. It has not been erased. Retry after restoring your browser data, or keep a recovery copy and start fresh.</p><p><button type="button" class="button button-secondary" id="retry-state">Retry saved data</button></p><p><button type="button" class="button button-secondary" id="reset-state">Back up and start fresh</button></p><small>Recovery copies stay in this browser’s local storage under stayguide-demo-recovery-. To restore one with technical help, copy its properties and active values back to stayguide-demo-properties and stayguide-demo-active, then retry. These copies contain private editing access: do not share them or clear browser data.</small></section>
 <div id="empty-state" class="empty-state"><div class="empty-illustration">✳</div><h2>Let's make your first guide.</h2><p>No signup, no complicated setup. Just a lovely place to start.</p><form id="create-form"><label for="first-name">What's your property called?</label><div class="create-input-row"><input id="first-name" maxlength="80" placeholder="e.g. The Little Olive House" required autofocus><button type="submit" class="button button-primary">Create my guide <span aria-hidden="true">↗</span></button></div></form><small>You can change everything later.</small></div>
 <section id="editor-shell" class="editor-shell" hidden>
-  <div class="property-strip"><div class="property-tabs" id="property-tabs" aria-label="Your properties"></div><button type="button" class="add-property-tab" id="add-tab" aria-label="Add a property">＋</button></div>
+  <div class="property-strip"><div class="property-tabs" id="property-tabs" aria-label="Your properties"></div></div>
   <div class="property-overview">
+    <div class="property-editing">
     <section class="property-summary" aria-labelledby="property-heading">
       <div class="property-summary-head">
         <span class="property-identity property-identity-large" id="property-identity" aria-hidden="true"></span>
-        <div><span class="summary-label">EDITING YOUR GUIDE</span><h2 id="property-heading">Your place</h2><p id="save-status" role="status">All changes saved</p></div>
+        <div><h2 id="property-heading">Your place</h2><p id="save-status" role="status">All changes saved</p></div>
       </div>
       <nav class="guide-actions" aria-label="Guest guide actions">
         <a id="view-link" target="_blank" rel="noopener" class="button button-primary" aria-label="Preview guest guide (opens in a new tab)">Preview guide</a>
@@ -32,16 +32,18 @@
         <button type="button" id="open-qr" class="button button-secondary" aria-haspopup="dialog">QR &amp; print</button>
       </nav>
     </section>
+      <div class="section-title"><h3>Guide sections</h3><span class="card-counter" id="card-counter"></span></div>
+      <div class="editor-grid" id="editor-grid"></div>
+    </div>
     <section class="guide-progress" id="guide-progress" aria-labelledby="progress-heading" hidden>
       <h3 id="progress-heading">Guide progress</h3>
       <p id="progress-summary" role="status"></p>
       <progress id="section-progress" max="10" value="0" aria-labelledby="progress-heading progress-summary"></progress>
       <p class="progress-counts" id="progress-counts"></p>
+      <details class="progress-checklist-details" id="progress-checklist-details"><summary>Section checklist</summary><ul class="progress-checklist" id="progress-checklist" aria-label="Saved section status"></ul></details>
       <details class="progress-help"><summary>How is this counted?</summary><p>Complete means every field in that section has saved text. Started means only some fields have text; empty means none do. Welcome needs a name and a welcome message. Sections are optional: this counts filled fields, not guest readiness.</p></details>
     </section>
   </div>
-  <div class="section-title"><div><h3>Make their stay feel effortless.</h3><p>Add the little details that make a big difference.</p></div><span class="card-counter" id="card-counter"></span></div>
-  <div class="editor-grid" id="editor-grid"></div>
   <p class="prototype-caution">Prototype note: editing access is saved in this browser. Keep this browser's data to continue editing. Accounts, 24-hour expiry, translations and billing are not implemented yet.</p>
 </section></main>
 </div>
@@ -75,12 +77,12 @@
   </div>
 </dialog>
 <dialog id="qr-workspace" class="qr-workspace" aria-labelledby="qr-title" aria-describedby="qr-property-name" hidden>
-  <header class="qr-workspace-head"><div><span class="eyebrow">A WARM WELCOME, ON PAPER</span><h2 id="qr-title">QR &amp; print</h2><p id="qr-property-name"></p></div><button type="button" id="close-qr" class="close-icon" aria-label="Close QR and print workspace">×</button></header>
+  <header class="qr-workspace-head"><div><span class="eyebrow">GUEST MATERIALS</span><h2 id="qr-title">QR &amp; print</h2><p id="qr-property-name"></p></div><button type="button" id="close-qr" class="close-icon" aria-label="Close QR and print workspace">×</button></header>
   <div class="qr-workspace-body">
     <aside id="qr-url-warning" class="qr-warning" role="note" hidden></aside>
     <div class="qr-workspace-grid">
-      <section class="qr-download-panel" aria-labelledby="qr-download-title"><h3 id="qr-download-title">A little code. A lovely stay.</h3><p>One scan opens your guest guide.</p><div class="qr-image-frame"><img id="qr-preview" width="288" height="288" alt="QR code for your guest guide"></div><span class="summary-label">EXACT DESTINATION</span><a id="qr-destination" target="_blank" rel="noopener"></a><div class="qr-download-actions"><button type="button" id="download-png" class="button button-primary">Download QR</button><a id="download-qr" class="button button-secondary" download>Download SVG</a></div><p class="qr-file-note">PNG image for printing · SVG for resizing</p><p id="qr-download-status" role="status" aria-live="polite"></p><p id="qr-download-error" class="editor-error" role="alert" tabindex="-1" hidden></p></section>
-      <section class="qr-card-panel" aria-labelledby="qr-card-title"><span class="qr-paper-icon" aria-hidden="true"><svg viewBox="0 0 48 56" width="48" height="56" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 2h23l9 9v43H8Z"/><path d="M31 2v10h9M15 20h18M15 25h12"/><rect x="16" y="33" width="6" height="6"/><rect x="26" y="33" width="6" height="6"/><path d="M16 44h6m4 0h6"/></svg></span><h3 id="qr-card-title">Welcome them in.</h3><p>A thoughtfully designed welcome card, ready for your property.</p><a id="print-card" class="button button-primary" target="_blank" rel="noopener" aria-label="Preview and print welcome card (opens in a new tab)">Preview &amp; print card <span aria-hidden="true">↗</span></a><p>Open the preview, then use your browser’s Print / Save as PDF.</p><div class="qr-placement"><h4>A good place for a warm welcome</h4><p>Place the card by the entrance or bedside, with good light and room to scan. Test the exact link on a guest’s phone before making permanent cards.</p></div></section>
+      <section class="qr-download-panel" aria-labelledby="qr-download-title"><h3 id="qr-download-title">Guest Guide QR</h3><p>One scan opens your guest guide.</p><div class="qr-image-frame"><img id="qr-preview" width="288" height="288" alt="QR code for your guest guide"></div><span class="summary-label">EXACT DESTINATION</span><a id="qr-destination" target="_blank" rel="noopener"></a><div class="qr-download-actions"><button type="button" id="download-png" class="button button-primary">Download QR</button><a id="download-qr" class="button button-secondary" download>Download SVG</a></div><p class="qr-file-note">PNG image for printing · SVG for resizing</p><p id="qr-download-status" role="status" aria-live="polite"></p><p id="qr-download-error" class="editor-error" role="alert" tabindex="-1" hidden></p></section>
+      <section class="qr-card-panel" aria-labelledby="qr-card-title"><div class="qr-card-preview" aria-hidden="true"><span class="card-preview-welcome">Welcome.</span><span class="card-preview-label">MAKE YOURSELF AT HOME AT</span><strong id="card-preview-name"></strong><img id="card-preview-qr" width="110" height="110" alt=""><span class="card-preview-caption">Scan. Settle in. Enjoy.</span><span class="card-preview-brand">StayGuide.</span></div><p class="qr-preview-note">Layout preview · open below for the full-size card</p><h3 id="qr-card-title">Printable Welcome QR Card</h3><p>A5 portrait · one welcome card with your guest-guide QR.</p><a id="print-card" class="button button-primary" target="_blank" rel="noopener" aria-label="Preview and print welcome card (opens in a new tab)">Preview &amp; print card <span aria-hidden="true">↗</span></a><p>Open the preview, then use your browser’s Print / Save as PDF.</p><div class="qr-placement"><h4>A good place for a warm welcome</h4><p>Place the card by the entrance or bedside, with good light and room to scan. Test the exact link on a guest’s phone before making permanent cards.</p></div></section>
     </div>
     <p class="qr-prototype-note">This is a working prototype. A permanent card needs a stable public guest URL.</p>
   </div>

@@ -80,3 +80,19 @@ These IDs are reserved proposals checked against the existing catalog. They do n
 4. Continue approved SG-P30 photo planning/implementation when separately authorized, with storage/limits/validation decisions. Themes, offline access, analytics and advanced organization remain deferred/research-only, without new task IDs or release dependencies.
 
 This recommendation balances UX and test cost, not proven demand. It does not approve reordering P3/P4 or change SG-P31/SG-P40–SG-P43 requirements. SG-SEO-01 research can run independently once authorized.
+
+## SG-UX-01 — Premium, compact host dashboard (owner-authorized 2026-11-13)
+
+- Focused host-only visual/layout revision after isolated SG-P22-POC-R1: remove dashboard hero/marketing headings; compact top bar/property tabs; one coherent selected-property surface with saved state, three existing actions and ten existing editable cards. Preserve drawer, creation/switching, progress semantics, API/model, guest SSR/noindex and privacy boundaries.
+- Compact 260–320px desktop progress panel beside the section grid, including ten truthful saved complete/started/empty statuses; reposition below editing on small screens. No mandatory property photos. Warm off-white/navy/violet direction from the two owner references; no new navigation/features/dependencies.
+- Polish SG-P21 QR/Print presentation with implemented output choices and a useful selected-property layout preview. Preserve canonical QR, actual SVG/PNG downloads and native A5-card Print / Save as PDF. No Welcome Book button/generator, fake actions, API/schema change or SG-SHARE01 modification.
+- Acceptance: actual rendered inspection at 1440/1280/768/390/320px; visible editing/cards earlier on laptop; no horizontal page overflow/clipped controls; tab stress, accessible editor/keyboard/save-state and QR/Print regressions pass; unchanged guest pages. Run unit/integration/browser checks, record evidence/limits, provide an owner-review ZIP under 10 MB with manifest and full evidence separately outside Git. No commits/push/deploy. STOP for owner visual review.
+- Record approved future PDF visual direction in DESIGN_SYSTEM.md; this does not select technology, close D-013 or authorize PDF integration. Minimize approval requests through the existing repository browser harness and scoped local review artifacts; never weaken sandbox or configuration.
+
+## SG-UX-01-R1 — Final dashboard polish (owner-authorized 2026-11-14)
+
+- Preserve the reviewed SG-UX-01 layout and all pending changes. Remove only the duplicate property-strip plus button (keep the labelled top-bar Add a property) and sidebar slogan. Retain current creation behavior.
+- Reuse one status-mark presentation in cards/checklist: neutral outlined circle for Empty, solid amber circle for Started, green check for Complete, with readable labels/accessible descriptions. Do not change saved data, completion rules/counts or transitions.
+- Verify multiple/long property tabs at 320/390px: fully visible selected tab, discoverable overflow, native horizontal scroll and keyboard access without page overflow. Keep tabs; no dropdown/workflow replacement.
+- Strengthen compactness acceptance using stable position/visibility limits that remain valid after commit, independently of Git HEAD comparisons. Complete Node/Chrome regressions and screenshot review at 1440/1280/768/390/320px; compact review ZIP under 10 MB and separate full evidence in StayGuide-Reviews.
+- Owner reports successful actual local-app interaction testing and approves the overall layout in principle; record separately from automated verification. No guest/API/schema/dependency/PDF/accommodation-type/terminology/SG-SHARE01 changes, unrelated task, commit/push/deploy. STOP for explicit final owner approval.
