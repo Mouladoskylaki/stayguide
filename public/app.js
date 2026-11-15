@@ -1,18 +1,7 @@
 import {previewWarning,qrFilename,qrPngBlob} from './qr-tools.js';
+import {FIELDS} from './guide-content.js';
 const STORAGE = 'stayguide-demo-properties';
 const ACTIVE = 'stayguide-demo-active';
-const FIELDS = [
-  { id:'welcome', title:'Welcome & property', icon:'✳', hint:'Make guests feel at home.', fields:[['property_name','Property name','text','e.g. The Little Olive House'],['welcome','Welcome message','textarea','A few kind words to welcome your guests.']]},
-  { id:'wifi', title:'Wi-Fi', icon:'⌁', hint:'The first thing every guest asks.', fields:[['wifi_name','Network name','text','e.g. OliveHouse_Guest'],['wifi_password','Wi-Fi password','text','Your network password']]},
-  { id:'arrival', title:'Check-in & check-out', icon:'◷', hint:'Arrival and departure made easy.', fields:[['checkin','Check-in','textarea','e.g. From 3:00 PM. The entrance is on the garden side.'],['checkout','Check-out','textarea','e.g. Before 11:00 AM. Please leave keys on the table.']]},
-  { id:'rules', title:'House rules', icon:'⌂', hint:'A few thoughtful ground rules.', fields:[['rules','House rules','textarea','e.g. No smoking indoors. Quiet hours after 10 PM.']]},
-  { id:'appliances', title:'How things work', icon:'⚙', hint:'Appliances and useful instructions.', fields:[['appliances','Appliances & equipment','textarea','e.g. How to use the air conditioning, coffee machine and hot water.']]},
-  { id:'parking', title:'Parking & transport', icon:'↗', hint:'Help them find their way.', fields:[['parking','Parking & getting around','textarea','e.g. Free parking in front of the property.']]},
-  { id:'local_tips', title:'Local favourites', icon:'♡', hint:'Your best neighbourhood tips.', fields:[['local_tips','Places to explore','textarea','e.g. Our favourite bakery is two streets away.']]},
-  { id:'emergency', title:'Emergency information', icon:'✚', hint:'Useful numbers and information.', fields:[['emergency','Emergency information','textarea','e.g. Emergency services: 112. Nearest hospital: ...']]},
-  { id:'contact', title:'Contact your host', icon:'✉', hint:'An easy way to get in touch.', fields:[['contact','Contact details','textarea','e.g. Call or message on ...']]},
-  { id:'additional', title:'Good to know', icon:'◎', hint:'Everything else worth sharing.', fields:[['additional','Additional information','textarea','e.g. Bin collection is on Tuesday.']]}
-];
 // Local, decorative line icons. Section names remain the accessible labels.
 const SECTION_ICONS = {
   welcome:'<path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5Z"/>',
@@ -187,6 +176,7 @@ async function loadActive(){
   }finally{if(isCurrent())$('#editor-shell').removeAttribute('aria-busy');}
 }
 function render(){
+  if($('#qr-workspace').open)closeQr();
   const host=$('#property-tabs'),restoreTabFocus=document.activeElement?.parentElement===host;host.replaceChildren();
   guides.forEach((g,index)=>{
     const selected=g.id===activeId,name=selected?current.property_name:(g.label||`Property ${index+1}`);
@@ -341,6 +331,7 @@ for(const id of ['editor-drawer','discard-dialog','qr-workspace'])$('#'+id).addE
 });
 function closeQr(restoreFocus=false){
   qrVersion++;
+  resetBook();
   const opener=qrOpener;qrOpener=null;
   $('#qr-workspace').close();$('#qr-workspace').hidden=true;
   $('#download-png').disabled=false;$('#download-png').textContent='Download QR';
@@ -352,6 +343,7 @@ $('#open-qr').addEventListener('click',()=>{
   if(!current||storageProblem)return;
   qrOpener=$('#open-qr');qrVersion++;
   $('#qr-property-name').textContent=current.property_name;
+  resetBook();$('#book-property-name').textContent='For '+current.property_name;
   $('#card-preview-name').textContent=current.property_name;$('#card-preview-qr').src='/g/'+activeId+'/qr.svg';
   const link=location.origin+'/g/'+activeId;
   $('#qr-destination').href=link;$('#qr-destination').textContent=link;
@@ -394,6 +386,42 @@ $('#download-png').addEventListener('click',async()=>{
       $('#qr-download-error').hidden=false;$('#qr-download-error').focus();
     }
   }finally{if(isCurrent()){$('#download-png').disabled=false;$('#download-png').textContent='Download QR';}}
+});
+// PDF code/font payloads are requested only by an explicit export action.
+let bookTools;
+function resetBook(){
+  $('#book-controls').disabled=false;$('#download-book').textContent='Download PDF';
+  $('#book-form').removeAttribute('aria-busy');$('#book-status').textContent='';
+  $('#book-error').textContent='';$('#book-error').hidden=true;$('#book-property-name').textContent='';
+}
+$('#book-form').addEventListener('submit',async event=>{
+  event.preventDefault();
+  if(!current||storageProblem||editing||editorSaving||!$('#qr-workspace').open||$('#book-controls').disabled)return;
+  const model=current,id=activeId,load=loadVersion,version=qrVersion;
+  const size=new FormData($('#book-form')).get('book-size');
+  const isCurrent=()=>current===model&&activeId===id&&loadVersion===load&&qrVersion===version&&!storageProblem&&!editing&&!editorSaving&&$('#qr-workspace').open;
+  $('#book-controls').disabled=true;$('#download-book').textContent='Preparing…';$('#book-form').setAttribute('aria-busy','true');
+  $('#book-error').hidden=true;$('#book-status').textContent='Preparing your saved Welcome Book…';
+  try{
+    if(!bookTools)bookTools=import('./welcome-book.js').catch(error=>{bookTools=null;throw error;});
+    const tools=await bookTools;if(!isCurrent())return;
+    // Known owner credentials must never be printed, even if pasted into a guest Wi-Fi field.
+    if(guides.some(entry=>FIELDS.some(section=>section.fields.some(([key])=>typeof model[key]==='string'&&model[key].includes(entry.token)))))throw new tools.BookContentError('Saved guest content contains owner editing credentials. Remove them before exporting.');
+    const snapshot=tools.bookSnapshot(model,location.origin+'/g/'+id);
+    const result=await tools.generateBook(snapshot,size,isCurrent);if(!result||!isCurrent())return;
+    const url=URL.createObjectURL(result.blob),link=document.createElement('a');
+    link.href=url;link.download=tools.bookFilename(snapshot.name,size);document.body.append(link);link.click();link.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),30000);
+    $('#book-status').textContent='Your '+size+' PDF download is ready. If it did not save, choose Download PDF again.';
+  }catch(error){
+    if(isCurrent()){
+      const tools=await bookTools?.catch(()=>null);
+      if(!isCurrent())return;
+      $('#book-status').textContent='';
+      $('#book-error').textContent=tools&&error instanceof tools.BookContentError?error.message:'Your book could not be prepared. Check your connection and choose Download PDF to retry. No saved content was changed.';
+      $('#book-error').hidden=false;$('#book-error').focus();
+    }
+  }finally{if(isCurrent()){$('#book-controls').disabled=false;$('#download-book').textContent='Download PDF';$('#book-form').removeAttribute('aria-busy');}}
 });
 $('#create-form').addEventListener('submit',async e=>{
   e.preventDefault();const name=$('#first-name').value.trim();if(!name)return;

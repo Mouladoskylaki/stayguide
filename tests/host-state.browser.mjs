@@ -11,6 +11,7 @@ import {handleRequest} from '../src/worker.js';
 import {createLocalDb} from '../node/db.mjs';
 import {checkGuest} from './guest.browser.mjs';
 import {checkQrPrint} from './qr-print.browser.mjs';
+import {checkWelcomeBook} from './welcome-book.browser.mjs';
 import {checkHostWorkspace} from './host-workspace.browser.mjs';
 
 const root=new URL('../public/',import.meta.url);
@@ -29,7 +30,7 @@ const server=http.createServer(async(req,res)=>{
       if(pathname==='/baseline-app.js')return new Response(baselineAppJs,{headers:{'Content-Type':'text/javascript'}});
       if(pathname==='/baseline-host.css')return new Response(baselineHostCss,{headers:{'Content-Type':'text/css'}});
       if(pathname==='/baseline.css')return new Response(baselineCss,{headers:{'Content-Type':'text/css'}});
-      if(!/^\/[a-z.-]+$/.test(pathname))return new Response('Not found',{status:404});
+      if(!/^\/(?:vendor\/)?[a-z0-9.-]+$/.test(pathname))return new Response('Not found',{status:404});
       try{
         const type=pathname.endsWith('.css')?'text/css':pathname.endsWith('.js')?'text/javascript':'text/html';
         return new Response(await fs.readFile(new URL(pathname.slice(1),root)),{headers:{'Content-Type':type}});
@@ -407,6 +408,7 @@ try{
   }
   console.log('PASS: ten editors, native inertness, Tab wrap/focus restore, Escape/Cancel/backdrop, exact dirty comparison/revert/discard, inline failure/retry, duplicate/slow save and reduced-height scrolling.');
 
+  await checkWelcomeBook({origin,artifacts,command,evaluate,navigate,screenshot,waitFor});
   await checkQrPrint({origin,artifacts,command,evaluate,navigate,screenshot,waitFor});
   console.log('Checking unchanged shared pages');
   await unchangedPage('/', 'marketing-unchanged-desktop',1440,1000);

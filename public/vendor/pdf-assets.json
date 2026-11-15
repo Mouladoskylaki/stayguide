@@ -1,0 +1,32 @@
+{
+  "pdfmake": "0.3.14",
+  "font": "Noto Sans v2.015",
+  "rawFonts": [
+    {
+      "file": "NotoSans-Regular.ttf",
+      "bytes": 825628,
+      "sha256": "f5f552c8c5edb61fe6efb824baf4d4de47b1a8689ab4925ff43f7bd6a4ebece5"
+    },
+    {
+      "file": "NotoSans-Bold.ttf",
+      "bytes": 838072,
+      "sha256": "3a08a47daa00cade516425c15c57615aef2fd418ec9811a7b9f465088f92cc05"
+    }
+  ],
+  "fontArchiveSha256": "0c34df072a3fa7efbb7cbf34950e1f971a4447cffe365d3a359e2d4089b958f5",
+  "registryIntegrity": "sha512-EDyOlwiDnE8e0eITSpHwZCVAP/veWq0TxA2RyhoDO0cSLat7HEGNtKUN6UiW9+YovO2GhcWlK99Q7tj9sof9gg==",
+  "assets": [
+    {
+      "file": "pdfmake-0.3.14.min.js",
+      "bytes": 835141,
+      "gzipBytes": 294839,
+      "sha256": "e095e5b991dce0eb84f1989c42a2dbf7d0672fb8510ea3fe1c958920d6d3751d"
+    },
+    {
+      "file": "noto-sans-2.015.js",
+      "bytes": 2218566,
+      "gzipBytes": 1013506,
+      "sha256": "6b9708bd0766fb36df2a23210eb113e0c18431e73cabfa4679d0e1259a944e78"
+    }
+  ]
+}

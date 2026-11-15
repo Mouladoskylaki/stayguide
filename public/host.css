@@ -367,3 +367,18 @@
   .section-title { margin-top: 16px; }
   .card-counter { font-size: 11px; }
 }
+
+/* SG-P22: an additional output within the existing QR workspace. */
+.book-panel { margin-top: 24px; padding: 24px; border: 1px solid var(--host-border); border-radius: var(--host-radius-md); background: var(--host-surface); }
+.book-panel h3 { margin-top: 0; }
+.book-panel p { overflow-wrap: anywhere; }
+#book-property-name { font-weight: 650; color: var(--host-ink); }
+.qr-workspace .book-privacy { font-size: 12px; line-height: 1.65; }
+#book-controls { min-width: 0; border: 0; padding: 0; margin: 20px 0 0; }
+#book-controls legend { padding: 0; font-size: 13px; font-weight: 650; }
+.book-options { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 8px; }
+.book-options label { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 12px; border: 1px solid var(--host-border); border-radius: 8px; font-size: 14px; cursor: pointer; }
+.book-options input { accent-color: var(--host-accent); width: 18px; height: 18px; }
+.book-options input:focus-visible { outline: 3px solid var(--host-focus); outline-offset: 3px; }
+#book-status:empty { display: none; }
+@media (max-width: 649px) { .book-panel { padding: 20px; } #download-book { width: 100%; } }

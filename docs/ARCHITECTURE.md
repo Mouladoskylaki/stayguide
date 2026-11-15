@@ -20,3 +20,8 @@ Temporary edit token in localStorage is NOT production authentication. Public UR
 
 ## Performance goals (targets, not measurements)
 Fast on moderate mobile; SSR readable with JS disabled; minimal JS and CSS; no external font dependency; image size variants, dimensions, lazy loading for non-hero media; measure transfer bytes, LCP, CLS, TTFB before launch. Do not introduce an arbitrary numeric SLO without baseline measurements.
+
+
+## SG-P22 — approved local-browser PDF path (2026-11-14)
+
+`public/guide-content.js` preserves the existing host field registry and supplies `public/welcome-book.js`'s explicit saved-content projection. The host dynamically imports PDF logic only on export; pdfmake 0.3.14 and Noto Sans v2.015 font VFS are versioned local vendor assets, loaded on demand. No npm runtime graph, frontend bundler, public PDF endpoint, remote generator or PDF storage is added. The existing canonical QR SVG route supplies the PDF's vector QR. Request/workspace/model identity is rechecked after asynchronous work and before download. PDFs remain transient browser Blobs; their download URLs are revoked. See [integration/maintenance evidence](SG_P22_PDF_INTEGRATION.md). Guest SSR and all API/schema contracts remain unchanged; production authentication/privacy/release gates remain open.

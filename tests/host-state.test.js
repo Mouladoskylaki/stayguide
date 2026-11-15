@@ -4,7 +4,7 @@ import vm from 'node:vm';
 import fs from 'node:fs';
 
 const helpers=fs.readFileSync(new URL('../public/qr-tools.js',import.meta.url),'utf8').replaceAll('export ','');
-const source=helpers+'\n'+fs.readFileSync(new URL('../public/app.js',import.meta.url),'utf8').replace(/^import[^\n]+\n/,'');
+const source=helpers+'\n'+fs.readFileSync(new URL('../public/guide-content.js',import.meta.url),'utf8').replaceAll('export ','')+'\n'+fs.readFileSync(new URL('../public/app.js',import.meta.url),'utf8').replace(/^import[^\n]+\n/gm,'');
 const STORAGE='stayguide-demo-properties',ACTIVE='stayguide-demo-active';
 const a={id:'a'.repeat(16),token:'a'.repeat(64)},b={id:'b'.repeat(16),token:'b'.repeat(64)};
 const response=(entry,name)=>({id:entry.id,guide:{property_name:name,wifi_name:name+' network'}});
@@ -402,4 +402,40 @@ test('SG-UX-01 checklist mirrors saved section states and clears on property swi
   assert.equal(d.element('#progress-checklist').children.length,0);
   assert.equal(d.element('#card-preview-name').textContent,'');
   assert.equal(d.element('#card-preview-qr').getAttribute('src'),null);
+});
+
+test('book exports ignore unsaved editor drafts and saving contexts',async()=>{
+  const d=await loaded();d.element('#open-qr').click();
+  d.run('editing={id:"welcome"}');await d.element('#book-form').listeners.submit({preventDefault(){}});
+  assert.equal(d.run('bookTools'),undefined);assert.equal(d.element('#book-controls').disabled,false);
+  d.run('editing=null;editorSaving=true');await d.element('#book-form').listeners.submit({preventDefault(){}});
+  assert.equal(d.run('bookTools'),undefined);
+});
+test('book export captures accepted saved model once and guards duplicate submissions',async()=>{
+  const d=await loaded();d.options.form={'book-size':'A4'};d.element('#open-qr').click();
+  d.run('globalThis.bookCalls=0;globalThis.bookCaptured=null;bookTools=Promise.resolve({bookSnapshot(model,url){bookCaptured={...model};return {name:model.property_name,destination:url}},generateBook(snapshot,size,guard){bookCalls++;return new Promise(resolve=>globalThis.finishBook=()=>resolve(null))}})');
+  const first=d.element('#book-form').listeners.submit({preventDefault(){}});await tick();
+  await d.element('#book-form').listeners.submit({preventDefault(){}});
+  assert.equal(d.run('bookCalls'),1);assert.equal(d.run('bookCaptured.property_name'),'Alpha');assert.equal(d.element('#book-controls').disabled,true);
+  d.run('finishBook()');await first;assert.equal(d.element('#book-controls').disabled,false);
+});
+test('book errors from a closed or switched workspace cannot change the next property',async()=>{
+ const d=await loaded();d.options.form={'book-size':'A5'};d.element('#open-qr').click();
+ d.run('bookTools=Promise.resolve({bookSnapshot(model,url){return {name:model.property_name,destination:url}},generateBook(){return new Promise((resolve,reject)=>globalThis.rejectBook=reject)}})');
+ const pending=d.element('#book-form').listeners.submit({preventDefault(){}});await tick();
+ d.element('#property-tabs').children[1].click();d.requests.at(-1).reply(response(b,'Beta'));await tick();
+ d.element('#open-qr').click();d.run('rejectBook(Error("PRIVATE exception details"))');await pending;
+ assert.equal(d.element('#book-property-name').textContent,'For Beta');assert.equal(d.element('#book-status').textContent,'');assert.equal(d.element('#book-error').hidden,true);assert.equal(d.element('#book-controls').disabled,false);
+});
+test('book generation errors are private and retry controls recover',async()=>{
+ const d=await loaded();d.options.form={'book-size':'A4'};d.element('#open-qr').click();
+ d.run('bookTools=Promise.resolve({BookContentError:class extends Error{},bookSnapshot(){return {}},generateBook(){throw Error("private-secret-do-not-show")}})');
+ await d.element('#book-form').listeners.submit({preventDefault(){}});
+ assert.equal(d.element('#book-controls').disabled,false);assert.equal(d.element('#book-error').hidden,false);assert.ok(!d.element('#book-error').textContent.includes('private-secret'));assert.ok(d.element('#book-error').textContent.includes('retry'));
+});
+test('known owner credentials pasted into a Wi-Fi field cannot enter the PDF generator',async()=>{
+ const d=await loaded();d.options.form={'book-size':'A4'};d.run('current.wifi_password=guides[0].token');d.element('#open-qr').click();
+ d.run('bookTools=Promise.resolve({BookContentError:class extends Error{},bookSnapshot(){throw Error("must not project")},generateBook(){throw Error("must not generate")}})');
+ await d.element('#book-form').listeners.submit({preventDefault(){}});
+ assert.ok(d.element('#book-error').textContent.includes('owner editing credentials'));assert.ok(!d.element('#book-error').textContent.includes(a.token));assert.equal(d.element('#book-controls').disabled,false);
 });

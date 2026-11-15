@@ -20,7 +20,7 @@ export async function checkQrPrint({origin,artifacts,command,evaluate,navigate,s
     assert.equal(await evaluate("document.querySelector('#qr-destination').textContent"),origin+guest);
     assert.ok(await evaluate("!document.querySelector('#qr-url-warning').hidden && document.querySelector('#qr-url-warning').textContent.includes('unsuitable for permanent')"));
     await screenshot('qr-workspace-'+width,width,width===1440?1000:844);
-    await evaluate("document.querySelector('#print-card').focus()");
+    await evaluate("document.querySelector('#download-book').focus()");
     await command('Input.dispatchKeyEvent',{type:'keyDown',key:'Tab',code:'Tab',windowsVirtualKeyCode:9});
     await command('Input.dispatchKeyEvent',{type:'keyUp',key:'Tab',code:'Tab',windowsVirtualKeyCode:9});
     assert.equal(await evaluate('document.activeElement.id'),'close-qr');

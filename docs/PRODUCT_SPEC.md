@@ -110,3 +110,8 @@ Research deliverables and coordination with SG-P50 are defined in [IMPLEMENTATIO
 ## Commercial discipline
 
 Preserve the provisional €1/property/year direction, existing subscription constraints and open volume-pricing questions. Verify payment fees/taxes, hosting/storage, translations, PDF generation, support/maintenance and actual demand/willingness to pay before claiming viability. Future comparisons should include established digital guidebook services and Etsy printable products with dated, verifiable commercial evidence; listing presence, reviews or asking prices alone do not establish sales, traffic or demand. No such research or pricing change is performed by SG-DOC02.
+
+
+## SG-P22 implementation update — 2026-11-14
+
+The separately approved filled A4/A5 Welcome Book is now implemented for owner review using locally served lazy pdfmake 0.3.14 and embedded Noto Sans. The historical status/proposal passages above describe earlier checkpoints. [Current evidence and limits](SG_P22_PDF_INTEGRATION.md) govern this implementation: saved guest content only, no extra editor, no public PDF endpoint/storage, explicit unsupported-glyph rejection and privacy guidance. Blank books, individual printables, photos, translation infrastructure and production launch remain outside this approval. Independent QR decoding, real-device/browser and first-public-release gates remain open.

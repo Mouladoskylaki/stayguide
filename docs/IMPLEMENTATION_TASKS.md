@@ -96,3 +96,25 @@ This recommendation balances UX and test cost, not proven demand. It does not ap
 - Verify multiple/long property tabs at 320/390px: fully visible selected tab, discoverable overflow, native horizontal scroll and keyboard access without page overflow. Keep tabs; no dropdown/workflow replacement.
 - Strengthen compactness acceptance using stable position/visibility limits that remain valid after commit, independently of Git HEAD comparisons. Complete Node/Chrome regressions and screenshot review at 1440/1280/768/390/320px; compact review ZIP under 10 MB and separate full evidence in StayGuide-Reviews.
 - Owner reports successful actual local-app interaction testing and approves the overall layout in principle; record separately from automated verification. No guest/API/schema/dependency/PDF/accommodation-type/terminology/SG-SHARE01 changes, unrelated task, commit/push/deploy. STOP for explicit final owner approval.
+
+
+## SG-P22 — Filled Welcome Book integration (owner-authorized 2026-11-14)
+
+- Approved: exactly pdfmake 0.3.14, locally served browser bundle, embedded Noto Sans Regular/Bold with MIT/OFL/third-party notices; lazy browser-only generation. No service, storage, endpoint, new framework or broad build pipeline.
+- Extend existing QR & Print with Filled Welcome Book, A4/A5 and one Download PDF action, selected-property feedback and failure/retry. Preserve compact dashboard, canonical guest/QR/card and API/schema.
+- Capture only accepted saved canonical fields; reject unsupported font characters and flagged private content, with contextual privacy guidance. Invalidate pending exports on property/load/save/workspace changes, never include drafts or credentials. All ten nonempty sections, multiline/long/Greek text; minimal-content sensible output.
+- Independently inspect generated PDFs: A4/A5 dimensions, embedded fonts, selectable complete ordered text, pagination/bounds, rendered visual review and canonical QR decoding where available. Test unsupported glyphs/privacy/failures/stale/duplicate exports, no eager assets, desktop/390/320 workspace and all existing Node/Chrome regressions. Measure actual raw/compressed payload and browser timings/memory where feasible.
+- Compact owner package under 10 MB (A4, A5, Greek, long fixture PDFs; desktop/mobile workspace; report/file list/hash manifest), technical evidence separately outside Git. Record unavailable browsers/devices/physical scans/prints; first-release security/multilingual gates remain. No blank book, extra printables, photos/translations, SG-SHARE01, commit/push/deploy or next task. STOP for owner review.
+
+
+## SG-P22-R1 — Premium editorial design and pagination (owner-authorized 2026-11-14)
+
+- Refine only the existing filled-book presentation: warm editorial cover with composed top/middle/bottom, integrated canonical QR/link, restrained rules/geometry and discreet branding; consistent interior icons, typography/rhythm/dividers, page furniture and Wi-Fi/arrival hierarchy. No imagery, host fields, themes or new product features.
+- Improve Greek/typical A5 sparse final-page flow with spacing/keep-with-next rules; no content loss, tiny type, unsafe margins, clipping or stranded headings. Preserve exact saved projection, privacy/glyph checks, fonts/pdfmake pin, lazy assets, stale-export guards, canonical QR and host/guest/QR/card/API/schema behavior.
+- Preserve all 32 pending SG-P22 paths. Compare the existing review fixtures/PDFs; inspect typical A4/A5, Greek, long, minimal and max-content output with independent text/font/bounds/QR raster checks and available decoding. Run relevant complete regressions.
+- Keep all new QA artifacts within `.local/qa/SG-P22-R1/`; owner package under `.local/reviews/SG-P22-R1/` with updated A4/A5/Greek/long PDFs, every-page sheets, before/after images, report/checks/limits and manifest. No dependency/network/config/rule change, external copy, commit/push/deploy or next task. STOP for owner review.
+
+
+### SG-P22 final acceptance / commit-readiness review — 2026-11-14
+
+Owner approves R1 visual direction and reports prior independent decoding of all four R1 review PDFs. Authorized review only: inspect the complete 32-path pending implementation, credentials/scope/provenance; rerun Node/Chrome/Firefox/PDF checks; distinguish refreshed automation from owner reports and launch gates; provide an actual-interface checklist and commit-readiness verdict. Preserve application/SG-SHARE01; no fixes/features, dependencies, photographs/showcase, commit/push/deployment or next task. Implementation deliverables verified; actual-interface acceptance and explicit Git approval remain owner actions.

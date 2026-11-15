@@ -32,3 +32,19 @@ For future SG-P22 integration, the owner agrees to minimal premium design: an el
 ### SG-UX-01-R1 final refinements — 2026-11-14
 
 Preserve the compact workspace approved in principle. Keep one clearly labelled Add a property button in the top bar; remove the property-strip plus and sidebar slogan. Cards and saved-progress rows use the same decorative marks: Empty = small neutral outlined circle, Started = small solid amber circle, Complete = green checkmark. Retain readable state labels and accessible descriptions; colors/glyphs do not change completion semantics. Keep native scrolling property tabs with edge overflow cues, full selected-tab bounds, full name in accessible label/title and wrapped selected-property heading. Long tab labels may ellipsize within those bounds. No dropdown or navigation redesign.
+
+
+## SG-P22 — filled book implementation for owner review
+
+Keep the approved host dashboard intact. Filled Welcome Book is an additional output inside QR & Print with native A4/A5 radio controls and one download action. Use the selected saved property name, contextual guest-content privacy guidance and accessible progress/error feedback.
+
+Book pages use embedded Noto Sans, dark ink/muted violet, generous margins, vector section icons and readable page numbering. A5 uses 32pt side margins/22pt cover/10.5pt body; A4 uses 48pt side margins/30pt cover/11pt body. Credential values receive restrained emphasis. Headings and labels stay with following text where possible; long text flows without fixed-height containers. Minimal saved content produces one named cover with canonical QR and no invented sections. Local/temporary guest-link warnings remain visible in the PDF. Actual renders are inspected against `references/prints-and-guest.png` as direction only; final owner visual approval remains pending.
+
+
+## SG-P22-R1 — editorial PDF refinement (2026-11-14)
+
+Owner-authorized direction: premium boutique hospitality, warm and restrained. Covers now use very pale cream, a discreet masthead, violet rules, a larger property title and a separate lower QR/link area. A4/A5 titles are 38pt/25pt; names over 55 characters receive less introductory whitespace, not cropped text. QR remains canonical vector geometry with its four-module quiet zone. No photos, external artwork, fonts or host decisions.
+
+Interior body remains 11pt A4 / 10.5pt A5, with format-specific line rhythm and existing 48pt/32pt side margins. All ten sections have consistent local line icons and thin dividers; static page furniture is separate from saved content. Short fitting single-line ASCII Wi-Fi values can pair horizontally; long, wide, Greek or multiline values fall back to full-width flow. Short paragraphs (up to 240 characters) stay together; longer paragraphs continue across pages. Compact A4 books with two interior pages can place a late section on their existing short final page to balance the spread, without altering long-book flow. Saved blank lines keep their line height. Headings and sublabels follow explicit saved-value IDs instead of counting their own nested graphics as following content.
+
+Verified fixture results, not fixed page-count guarantees: typical A4 remains 3 pages, typical A5 4→3, Greek 4→3, long A4 4→3 and long A5 6→5. Minimal covers remain one page. The owner subsequently approved this visual direction during the final SG-P22 review and reported independent decoding of all four review PDFs. Actual-interface acceptance, real printing and public-URL phone scanning remain separate. See [R1 evidence](SG_P22_PDF_INTEGRATION.md#sg-p22-r1--editorial-refinement-evidence-2026-11-14).
