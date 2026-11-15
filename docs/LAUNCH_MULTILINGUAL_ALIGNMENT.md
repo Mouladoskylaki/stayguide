@@ -29,6 +29,8 @@ These are behavioral requirements, not a schema/API design. Locale identifiers, 
 
 ## Current provider desk research
 
+Subsequent SG-P31 Phase 1 research is now prepared in [the Phase 1 report](SG_P31_PHASE1_RESEARCH.md). The original planning observations below are retained; Phase 1 expands verification, uncertainties, scenarios and benchmark design without selecting a provider or authorizing Phase 2.
+
 Primary documentation checked 2026-11-15; no accounts, API calls, benchmarks or spending. Rates and availability must be rechecked at selection time. No provider/model is selected and no measured StayGuide cost, latency or quality is claimed.
 
 | Candidate | Observed offering and consequence for research |
