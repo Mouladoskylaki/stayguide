@@ -26,6 +26,10 @@ Create an exceptionally fast, warm, simple international digital guest guide. Ho
 Trial starts, completed guides, completion time, previews, QR creation, paid conversions, active properties, renewal, and cost per property. 100 active properties = initial validation; 1k/10k/50k+ are ambitions, not forecasts.
 
 ## Current status
+
+Current checkpoint: owner-accepted SG-P22 at `c76f32628d83f89855c0dc2c6e5e9bff2a1c141e`, committed/pushed with no deployment. Filled text-based A4/A5 books are implemented. The following SG-P21 description and earlier candidate/technology passages are historical; [launch alignment](LAUNCH_MULTILINGUAL_ALIGNMENT.md) records the latest approved v1 direction, multilingual requirements and unresolved choices. Photos, blank books, additional printables/sections, AI translation and showcases remain unimplemented. SEO research is complete; editorial routes remain unimplemented.
+
+### Historical SG-P21 baseline
 Local prototype at SG-P21 checkpoint `e32819af76d96996c35d16dd21b2e7b99d72b918`: multi-property host dashboard, accessible section editor/recovery, SSR guest guide, Wi-Fi password copy/fallback, QR workspace with SVG/PNG downloads and one printable A5 welcome card. Browser Print / Save as PDF for that single card is not a Welcome Book PDF generator. No optional-section activation, photos, translations, Wi-Fi connection QR, native guide sharing or editorial `/guides/` routes. Secure accounts, time-limited trial, billing and production safeguards remain missing. Current evidence and limitations belong in [ROADMAP.md](ROADMAP.md) and [PROGRESS.md](PROGRESS.md).
 
 ## Approved expansion principles
@@ -115,3 +119,10 @@ Preserve the provisional €1/property/year direction, existing subscription con
 ## SG-P22 implementation update — 2026-11-14
 
 The separately approved filled A4/A5 Welcome Book is now implemented for owner review using locally served lazy pdfmake 0.3.14 and embedded Noto Sans. The historical status/proposal passages above describe earlier checkpoints. [Current evidence and limits](SG_P22_PDF_INTEGRATION.md) govern this implementation: saved guest content only, no extra editor, no public PDF endpoint/storage, explicit unsupported-glyph rejection and privacy guidance. Blank books, individual printables, photos, translation infrastructure and production launch remain outside this approval. Independent QR decoding, real-device/browser and first-public-release gates remain open.
+
+
+## Owner-approved polished v1 direction (2026-11-15)
+
+The owner approves a substantially complete, polished public v1: excellent digital guides, optional property/section photography, photographic PDFs, filled/blank books, essential individual printables, optional additional sections, suggested content, useful guest actions, comprehensive multilingual support and an actual-results homepage. Beautiful by default, no required design choices, progressive disclosure, no mandatory onboarding complexity, a clean compact host workplace and exceptionally fast mobile delivery remain requirements. The 2–3 minute basic-guide goal requires measurement.
+
+See [launch and multilingual alignment](LAUNCH_MULTILINGUAL_ALIGNMENT.md) for all approved behaviors, the three proposed real showcase booklets, provider research, dependencies and open launch scope. This direction supersedes earlier candidate-only launch priority, while preserving existing implementation statuses and completed SG-P22 acceptance. No feature, provider/model, schema, API integration or deployment is authorized by this documentation task.

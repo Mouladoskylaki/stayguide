@@ -49,3 +49,13 @@ Implementation note: the approved browser distribution is vendored and hash-pinn
 ## SG-P22 final review — owner approval/evidence boundaries (2026-11-14)
 
 The owner approves **SG-P22-R1's visual direction** and reports that independent decoding previously succeeded for all four R1 owner-review PDFs (A4, A5, Greek and long A5). This records owner-reported software-decoding evidence, not an agent rerun, physical phone/printed-paper scanning or successful access to a public HTTPS guide. Actual-interface acceptance and explicit commit/push/deployment permissions remain separate; no further feature/task is authorized. Existing technology approval and all other open D-013/privacy/multilingual/security decisions remain unchanged.
+
+
+## Owner-approved launch and multilingual direction (2026-11-15)
+
+| ID | Status | Decision / boundary |
+|---|---|---|
+| D-020 | Fixed — product direction only | Polished v1 includes optional property/section photography, photographic filled books, blank books, essential printables, additional sections, templates/actions, comprehensive languages and actual-results homepage; beautiful defaults and progressive disclosure preserve the compact fast workplace. Three proposed real example booklets and homepage-before-workspace placement are recorded in [alignment](LAUNCH_MULTILINGUAL_ALIGNMENT.md). No implementation or exact showcase mechanism approved. |
+| D-021 | Fixed — behavioral requirements only | Pretranslated UI, host/guest language selection, AI server-side content translation, saved reusable section/source-version translations, invalidation with manual-correction preservation, PDF reuse, clear SSR fallback without extra guest steps, cost/abuse protection, accurate entities/instructions and no provider transfer of private credentials/account secrets. See [requirements and open choices](LAUNCH_MULTILINGUAL_ALIGNMENT.md#approved-multilingual-requirements). No provider/model, language list, quota, schema or cache implementation selected. |
+
+D-009 remains Open for provider/model, quality evaluation, actual costs/latency, launch languages, guest-trigger limits, retries, privacy/data handling and popular-language pretranslation. D-008/D-013 remain Open for media/storage and remaining PDF/photo policy; Unicode fonts/RTL, exact showcases and launch acceptance dependencies are unresolved. D-015–D-018 retain Open status; D-016's earlier candidate-only launch framing is superseded by D-020's launch direction, not by implementation approval. SG-P22's exact technology approval and DONE status remain preserved. Owner manual acceptance and the authorized Git checkpoint completed at `c76f326`; this is not deployment approval.

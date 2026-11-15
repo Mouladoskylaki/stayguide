@@ -25,3 +25,8 @@ Fast on moderate mobile; SSR readable with JS disabled; minimal JS and CSS; no e
 ## SG-P22 — approved local-browser PDF path (2026-11-14)
 
 `public/guide-content.js` preserves the existing host field registry and supplies `public/welcome-book.js`'s explicit saved-content projection. The host dynamically imports PDF logic only on export; pdfmake 0.3.14 and Noto Sans v2.015 font VFS are versioned local vendor assets, loaded on demand. No npm runtime graph, frontend bundler, public PDF endpoint, remote generator or PDF storage is added. The existing canonical QR SVG route supplies the PDF's vector QR. Request/workspace/model identity is rechecked after asynchronous work and before download. PDFs remain transient browser Blobs; their download URLs are revoked. See [integration/maintenance evidence](SG_P22_PDF_INTEGRATION.md). Guest SSR and all API/schema contracts remain unchanged; production authentication/privacy/release gates remain open.
+
+
+## Future multilingual/media requirements — no architecture change (2026-11-15)
+
+[Owner-approved alignment](LAUNCH_MULTILINGUAL_ALIGNMENT.md) requires server-side AI requests, reusable saved translations keyed by property/language/section/source version, correction preservation and readable SSR fallback, with translated content reused by PDFs. These behaviors are not implemented; provider, cache/storage design, schema/API, concurrency/invalidation mechanism, photo processing/storage and RTL/font approach remain unselected. Existing local-browser PDF and guest architecture remain unchanged. SG-P31 research must precede provider decisions and separately authorized implementation.
