@@ -1,0 +1,117 @@
+{
+  "schemaVersion": 1,
+  "status": "proposal-only-not-authorized",
+  "liveExecutionEnabled": false,
+  "priceEvidenceDate": "2026-11-15",
+  "sourceLanguages": [
+    "en-GB",
+    "el-GR"
+  ],
+  "locales": [
+    "en-GB",
+    "el-GR",
+    "de-DE",
+    "fr-FR",
+    "es-ES",
+    "it-IT",
+    "ja-JP",
+    "zh-Hans",
+    "ar"
+  ],
+  "variants": [
+    {
+      "id": "openai-luna",
+      "provider": "OpenAI API",
+      "model": "gpt-6-luna",
+      "usageEstimateUsd": 0.18432,
+      "funding": "Phase 1 documentation: $5 minimum prepaid purchase; actual account eligibility/minimum/expiry must be reverified; no purchase approved.",
+      "blockers": [
+        "Exact account/endpoint/model eligibility",
+        "Applicable residency terms and optional 10% premium",
+        "Hard input/output bounds and usage accounting"
+      ]
+    },
+    {
+      "id": "gemini-flash-lite",
+      "provider": "Google Gemini Developer API",
+      "model": "gemini-3.5-flash-lite",
+      "usageEstimateUsd": 0.86016,
+      "funding": "Phase 1 documentation: typically $5 prepay; actual region/tier minimum must be verified separately; no billing approved.",
+      "blockers": [
+        "Public family/under-18 API-client terms require clarification; server-side use is not an assumed exemption",
+        "Account/region access and exact token/thinking configuration"
+      ]
+    },
+    {
+      "id": "google-nmt",
+      "provider": "Google Cloud Translation",
+      "model": "NMT",
+      "usageEstimateUsd": 9.216,
+      "funding": "Cloud project/API/billing eligibility must be verified separately; no credits/commitment discounts assumed; no setup approved.",
+      "blockers": [
+        "Account/endpoint/language eligibility",
+        "Application-level hard budget reservation"
+      ]
+    },
+    {
+      "id": "google-tllm",
+      "provider": "Google Cloud Translation",
+      "model": "Translation LLM",
+      "usageEstimateUsd": 13.824,
+      "funding": "Cloud project/API/billing eligibility must be verified separately; no setup approved.",
+      "blockers": [
+        "2400 output characters is a validation assumption, not a proven provider billing cap",
+        "Account/regional model eligibility and enforceable charge bound"
+      ]
+    },
+    {
+      "id": "deepl-quality",
+      "provider": "DeepL API",
+      "model": "quality_optimized",
+      "usageEstimateUsd": null,
+      "funding": "Official regional Growth/Enterprise API quote, recurring fee, included usage and overage unknown; no subscription approved.",
+      "blockers": [
+        "Owner-approved exact plan/quote/terms",
+        "Language/model coverage",
+        "Separate usage and subscription/funding caps"
+      ]
+    }
+  ],
+  "limits": {
+    "jobsPerVariant": 192,
+    "maximumRetriesPerJob": 1,
+    "maximumAttemptsPerVariant": 384,
+    "maximumAttemptsAllVariants": 1920,
+    "sourceUnicodeCodePointsPerAttempt": 1200,
+    "generalModelInputTokensPerAttempt": 800,
+    "generalModelBillableOutputTokensPerAttemptIncludingThinking": 800,
+    "specialistOutputCharactersValidationOnly": 2400,
+    "pricedVariantsUsageCeilingUsd": 30,
+    "pricedVariantsCombinedStandardEstimateUsd": 24.08448,
+    "includesDeepLCost": false,
+    "includesTaxesOrFunding": false
+  },
+  "optionalOpenAIRegionalScenario": {
+    "premiumMultiplier": 1.1,
+    "lunaEstimateUsd": 0.202752,
+    "combinedPricedEstimateUsd": 24.102912,
+    "enabled": false,
+    "changesPilotLimits": false
+  },
+  "stopConditions": [
+    "No separate owner authorization for exact account/endpoint/model, corpus, attempts and usage/funding caps",
+    "Unsupported language/model, terms/privacy/age eligibility unresolved",
+    "Input/output billing bound cannot be established",
+    "Projected spend including reserved outputs/retries exceeds approved remaining budget",
+    "Provider/account quota or authentication failure",
+    "Unexpected source content, credentials, personal data or external network activity in offline mode",
+    "Any scope expansion, additional variants, repetitions or load testing not separately approved"
+  ],
+  "humanReview": "pending; qualified bilingual reviewers required; no automated semantic quality acceptance",
+  "notes": [
+    "Offline runner has no transport, credentials, retry dispatch or billing implementation.",
+    "Config is a proposal, not an enforceable live budget or authorization.",
+    "DeepL mock rows do not imply live eligibility.",
+    "English/Greek sources only; later independently approved directional coverage gate required."
+  ]
+}
