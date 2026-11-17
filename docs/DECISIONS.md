@@ -10,7 +10,7 @@
 | D-006 | Fixed | Vanilla HTML/CSS/JS direction; no unnecessary framework |
 | D-007 | Fixed | User reference mockups define warm design direction |
 | D-008 | Open | Final cloud architecture, caching/invalidation and storage pricing |
-| D-009 | Open | Translation provider, quota, supported languages and cost model |
+| D-009 | Partially resolved — owner selected model | OpenAI gpt-6-luna, Standard Global selected for v1; production quota, supported languages, cost/privacy/quality and integration controls remain open. |
 | D-010 | Open | Payment processor, VAT/merchant of record and micro-payment viability |
 | D-011 | Open | Authentication, trial expiry and abuse controls |
 | D-012 | Open | Final brand/domain; StayGuide name overlaps existing services |
@@ -59,3 +59,8 @@ The owner approves **SG-P22-R1's visual direction** and reports that independent
 | D-021 | Fixed — behavioral requirements only | Pretranslated UI, host/guest language selection, AI server-side content translation, saved reusable section/source-version translations, invalidation with manual-correction preservation, PDF reuse, clear SSR fallback without extra guest steps, cost/abuse protection, accurate entities/instructions and no provider transfer of private credentials/account secrets. See [requirements and open choices](LAUNCH_MULTILINGUAL_ALIGNMENT.md#approved-multilingual-requirements). No provider/model, language list, quota, schema or cache implementation selected. |
 
 D-009 remains Open for provider/model, quality evaluation, actual costs/latency, launch languages, guest-trigger limits, retries, privacy/data handling and popular-language pretranslation. D-008/D-013 remain Open for media/storage and remaining PDF/photo policy; Unicode fonts/RTL, exact showcases and launch acceptance dependencies are unresolved. D-015–D-018 retain Open status; D-016's earlier candidate-only launch framing is superseded by D-020's launch direction, not by implementation approval. SG-P22's exact technology approval and DONE status remain preserved. Owner manual acceptance and the authorized Git checkpoint completed at `c76f326`; this is not deployment approval.
+
+
+## SG-P31 Phase 3A — explicit owner model/storage authorization
+
+Owner selects **OpenAI gpt-6-luna, Standard Global** for v1 and authorizes additive migrations, local storage extensions and mock-only translation infrastructure. This supersedes prior provider/model-unselected statements for that choice only; it does not close D-009's quota, quality, language coverage, privacy, billing or production gates. [Phase 3A](SG_P31_PHASE3A_FOUNDATION.md) records the bounded implementation. No other provider comparison, live call, credential operation, paid service, live migration, commit/push or deployment follows.

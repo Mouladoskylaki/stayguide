@@ -149,3 +149,8 @@ Initial preparation record (superseded by the execution follow-up below): [Phase
 
 
 Phase 2B execution follow-up (2026-11-17): owner supplied exact inline authorization after the initial pre-process approval rejection. One actual live run then succeeded: eight token counts and eight generations, no retries, 916 input/402 output tokens, estimated Standard $0.0002926 (conservative $0.00032186), no structural/protected-string failures. See [results and comparison](SG_P31_PHASE2B_SMOKE.md#actual-execution-outcome). One-shot guard retained; no further live execution authorized. Qualified human quality review pending; no provider selection or parent-task completion.
+
+
+### SG-P31 Phase 3A — additive storage and mock-only foundation
+
+Owner authorizes translation source/version storage, additive D1 migrations, local adapter extensions, atomic claims/leases/reservations, conditional publication, cache/fallback, protected-field projection and offline tests. OpenAI gpt-6-luna Standard Global is selected; other provider comparisons stop. See [implementation and evidence](SG_P31_PHASE3A_FOUNDATION.md). Source language starts unknown, and UI catalogs stay separate. No real provider/credential/live database access, full UI, public generation endpoint, dependency installation, historical-evidence modification, commit/push or deployment. Implementation verified offline and ready for independent review; SG-P31 remains IN PROGRESS, not production-ready.

@@ -30,3 +30,8 @@ Fast on moderate mobile; SSR readable with JS disabled; minimal JS and CSS; no e
 ## Future multilingual/media requirements — no architecture change (2026-11-15)
 
 [Owner-approved alignment](LAUNCH_MULTILINGUAL_ALIGNMENT.md) requires server-side AI requests, reusable saved translations keyed by property/language/section/source version, correction preservation and readable SSR fallback, with translated content reused by PDFs. These behaviors are not implemented; provider, cache/storage design, schema/API, concurrency/invalidation mechanism, photo processing/storage and RTL/font approach remain unselected. Existing local-browser PDF and guest architecture remain unchanged. SG-P31 research must precede provider decisions and separately authorized implementation.
+
+
+## SG-P31 Phase 3A — owner-authorized mock-only foundation
+
+OpenAI gpt-6-luna Standard Global is selected for v1. Additive D1 migrations/source triggers, atomic claims with leases/reservations, current-version translation reads and a server-only mock service are implemented for review; see [architecture, migration and limits](SG_P31_PHASE3A_FOUNDATION.md). Existing guides do not acquire an assumed source language. The local JSON adapter preserves legacy rows and emulates repository operations; SQLite parity/concurrency tests supplement Node tests. No live transport, new HTTP route, credential access, UI/guest/PDF integration or live migration is enabled. Earlier unselected-provider descriptions above are historical; the other production/privacy/account/quality gates remain open.
