@@ -17,14 +17,14 @@ const id='0123456789abcdef',guide={property_name:'Synthetic property',welcome:'W
  await step(insert,[id,'HASH',JSON.stringify(guide),'now','now']);
  await step(SQL.source,[id,'welcome'],true);await step(SQL.language,[id,'welcome','en-GB']);
  const s=await step(SQL.source,[id,'welcome'],true);
- const a=['one',id,'welcome','en-GB','el-GR',s.source_version,CONFIG.model,CONFIG.promptVersion,100000,100010,CONFIG.reservationNano];
+ const a=['one',id,'welcome','en-GB','el-GR',s.source_version,CONFIG.model,CONFIG.promptVersion,100000,100010,CONFIG.reservationNano,'mock'];
  await step(SQL.claim,a);await step(SQL.claim,['duplicate',...a.slice(1)]);
- await step(SQL.claim,['reclaimed',...a.slice(1,8),100011,100100,CONFIG.reservationNano]);
+ await step(SQL.claim,['reclaimed',...a.slice(1,8),100011,100100,CONFIG.reservationNano,'mock']);
  await step(SQL.publish,['one',JSON.stringify({welcome:'Old 112.'}),'generated',100012]);
  await step(SQL.publish,['reclaimed',JSON.stringify({welcome:'Hello 112.'}),'generated',100012]);
- await step(SQL.cached,[id,'welcome','el-GR',CONFIG.model,CONFIG.promptVersion],true);
+ await step(SQL.cached,[id,'welcome','el-GR',CONFIG.model,CONFIG.promptVersion,'mock'],true);
  await step(SQL.manual,['reclaimed',JSON.stringify({welcome:'Corrected 112.'}),s.source_version,id,'welcome','el-GR',CONFIG.model,CONFIG.promptVersion,'en-GB',JSON.stringify({welcome:'Hello 112.'})]);
- await step(SQL.cached,[id,'welcome','el-GR',CONFIG.model,CONFIG.promptVersion],true);
+ await step(SQL.cached,[id,'welcome','el-GR',CONFIG.model,CONFIG.promptVersion,'mock'],true);
  const correction=['reclaimed',JSON.stringify({welcome:'Must not overwrite 112.'}),s.source_version,id,'welcome','el-GR',CONFIG.model,CONFIG.promptVersion,'en-GB',JSON.stringify({welcome:'Hello 112.'})];
  if(await step(SQL.manual,correction)!==0)throw Error('Concurrent correction was not rejected');
  const currentText=JSON.stringify({welcome:'Corrected 112.'});
@@ -33,26 +33,34 @@ const id='0123456789abcdef',guide={property_name:'Synthetic property',welcome:'W
   if(await step(SQL.manual,invalid)!==0)throw Error('Invalid correction expectation accepted');
  }
  await step(update,[JSON.stringify({...guide,welcome:'Changed 112.'}),'later',id]);
- await step(SQL.cached,[id,'welcome','el-GR',CONFIG.model,CONFIG.promptVersion],true);
+ await step(SQL.cached,[id,'welcome','el-GR',CONFIG.model,CONFIG.promptVersion,'mock'],true);
  const changed=await step(SQL.source,[id,'welcome'],true);await step(SQL.source,[id,'rules'],true);
- const newer=['new-current',id,'welcome','en-GB','el-GR',changed.source_version,CONFIG.model,CONFIG.promptVersion,100020,100100,CONFIG.reservationNano];
+ const newer=['new-current',id,'welcome','en-GB','el-GR',changed.source_version,CONFIG.model,CONFIG.promptVersion,100020,100100,CONFIG.reservationNano,'mock'];
  if(await step(SQL.claim,newer)!==1)throw Error('New source claim failed');
  await step(SQL.publish,['new-current',JSON.stringify({welcome:'New translation 112.'}),'generated',100021]);
  if(await step(SQL.manual,['reclaimed',JSON.stringify({welcome:'Stale 112.'}),s.source_version,id,'welcome','el-GR',CONFIG.model,CONFIG.promptVersion,'en-GB',currentText])!==0)throw Error('Stale identity accepted');
  if(await step(SQL.manual,['new-current',JSON.stringify({welcome:'Stale 112.'}),s.source_version,id,'welcome','el-GR',CONFIG.model,CONFIG.promptVersion,'en-GB',JSON.stringify({welcome:'New translation 112.'})])!==0)throw Error('Stale version accepted');
- await step(SQL.cached,[id,'welcome','el-GR',CONFIG.model,CONFIG.promptVersion],true);
+ await step(SQL.cached,[id,'welcome','el-GR',CONFIG.model,CONFIG.promptVersion,'mock'],true);
+ const real=['real-claim',id,'welcome','en-GB','el-GR',changed.source_version,CONFIG.model,CONFIG.promptVersion,100030,100100,CONFIG.reservationNano,'openai'];
+ if(await step(SQL.claim,real)!==1)throw Error('Real provenance claim failed');
+ const usage={inputTokens:100,outputTokens:40,reasoningTokens:0,conservativeNano:33000};
+ if(await step(SQL.reconcile,['real-claim',JSON.stringify(usage),33000])!==1)throw Error('Reconciliation failed');
+ if(await step(SQL.reconcile,['real-claim',JSON.stringify(usage),CONFIG.reservationNano+1])!==0)throw Error('Over-reservation usage accepted');
+ await step(SQL.publish,['real-claim',JSON.stringify({welcome:'Real fixture 112.'}),'generated',100031]);
+ await step(SQL.cached,[id,'welcome','el-GR',CONFIG.model,CONFIG.promptVersion,'openai'],true);
+ await step(SQL.cached,[id,'welcome','el-GR',CONFIG.model,CONFIG.promptVersion,'mock'],true);
 console.log(JSON.stringify({operations,expected,sql:SQL}));
 """
 
 trace = subprocess.run(['node', '--input-type=module', '-e', TRACE_JS], capture_output=True, text=True, check=True, timeout=15)
 x = json.loads(trace.stdout)
-x.update(initial=pathlib.Path('migrations/0000_guides.sql').read_text(), migration=pathlib.Path('migrations/0001_translation_foundation.sql').read_text(), schema=pathlib.Path('schema.sql').read_text())
+x.update(initial=pathlib.Path('migrations/0000_guides.sql').read_text(), migration=pathlib.Path('migrations/0001_translation_foundation.sql').read_text(), schema=pathlib.Path('schema.sql').read_text(),openai_migration=pathlib.Path('migrations/0002_openai_translation.sql').read_text())
 
 import sqlite3,json,sys
 c=sqlite3.connect(':memory:');c.row_factory=sqlite3.Row;c.execute('PRAGMA foreign_keys=ON')
 c.executescript(x['initial'])
 c.execute('INSERT INTO guides VALUES(?,?,?,?,?)',('legacy','HASH','{"welcome":"Original Greek text"}','now','now'))
-c.executescript(x['migration'])
+c.executescript(x['migration']);c.executescript(x['openai_migration'])
 assert c.execute("SELECT source_language FROM translation_sources WHERE guide_id='legacy' AND section='welcome'").fetchone()[0] is None
 assert c.execute("SELECT content_json FROM guides WHERE id='legacy'").fetchone()[0]=='{"welcome":"Original Greek text"}'
 out=[]
@@ -80,7 +88,7 @@ with tempfile.TemporaryDirectory(dir='.local/qa',prefix='sg-p31-phase3a-sql-') a
  barrier=threading.Barrier(2);results=[]
  def claim(i):
   db=sqlite3.connect(p,timeout=5);barrier.wait()
-  db.execute(x['claim'],{str(j+1):v for j,v in enumerate(('claim'+str(i),'g','welcome','en-GB','el-GR',2,'gpt-6-luna','hospitality-v1',100000,130000,660000))})
+  db.execute(x['claim'],{str(j+1):v for j,v in enumerate(('claim'+str(i),'g','welcome','en-GB','el-GR',2,'gpt-6-luna','hospitality-v1',100000,130000,660000,'mock'))})
   results.append(db.execute('SELECT changes()').fetchone()[0]);db.commit();db.close()
  ts=[threading.Thread(target=claim,args=(i,)) for i in range(2)]
  for t in ts:t.start()
@@ -88,7 +96,7 @@ with tempfile.TemporaryDirectory(dir='.local/qa',prefix='sg-p31-phase3a-sql-') a
  assert sorted(results)==[0,1],results
  c=sqlite3.connect(p);assert c.execute('SELECT COUNT(*) FROM translation_attempts').fetchone()[0]==1
  c.execute('UPDATE translation_policy SET budget_nano=660000')
- c.execute(x['claim'],{str(j+1):v for j,v in enumerate(('over','g','welcome','en-GB','de-DE',2,'gpt-6-luna','hospitality-v1',100000,130000,660000))})
+ c.execute(x['claim'],{str(j+1):v for j,v in enumerate(('over','g','welcome','en-GB','de-DE',2,'gpt-6-luna','hospitality-v1',100000,130000,660000,'mock'))})
  assert c.execute('SELECT changes()').fetchone()[0]==0
  c.close()
 
@@ -100,7 +108,7 @@ with tempfile.TemporaryDirectory(dir='.local/qa',prefix='sg-p31-phase3a-correct-
  p=os.path.join(d,'test.sqlite');db=sqlite3.connect(p);db.executescript(x['schema'])
  db.execute('INSERT INTO guides VALUES(?,?,?,?,?)',('g','HASH','{"welcome":"Original"}','now','now'))
  db.execute(x['sql']['language'],{'1':'g','2':'welcome','3':'en-GB'})
- claim=['edit-claim','g','welcome','en-GB','el-GR',2,'gpt-6-luna','hospitality-v1',100000,130000,660000]
+ claim=['edit-claim','g','welcome','en-GB','el-GR',2,'gpt-6-luna','hospitality-v1',100000,130000,660000,'mock']
  db.execute(x['sql']['claim'],{str(i+1):v for i,v in enumerate(claim)})
  original=json.dumps({'welcome':'Original'})
  db.execute(x['sql']['publish'],{'1':'edit-claim','2':original,'3':'generated','4':100001});db.commit();db.close()
@@ -116,3 +124,18 @@ with tempfile.TemporaryDirectory(dir='.local/qa',prefix='sg-p31-phase3a-correct-
  assert sorted(results)==[0,1],results
  db=sqlite3.connect(p);assert db.execute('SELECT origin FROM translations').fetchone()[0]=='manual';db.close()
 print('PASS: SQLite concurrent corrections admit one writer per submitted snapshot')
+
+# Migration 0002 must preserve existing manual mock rows, claims and consumed reservations.
+legacy=sqlite3.connect(':memory:');legacy.row_factory=sqlite3.Row;legacy.execute('PRAGMA foreign_keys=ON')
+legacy.executescript(x['initial']);legacy.executescript(x['migration'])
+legacy.execute('INSERT INTO guides VALUES(?,?,?,?,?)',('preserved','HASH','{"welcome":"Original"}','now','now'))
+legacy.execute(x['sql']['language'],{'1':'preserved','2':'welcome','3':'en-GB'})
+legacy.execute("INSERT INTO translation_attempts(claim_id,guide_id,section,source_language,target_language,source_version,model,prompt_version,created_ms,lease_until,reservation_nano) VALUES(?,?,?,?,?,?,?,?,?,?,?)",('old-manual','preserved','welcome','en-GB','el-GR',2,'gpt-6-luna','hospitality-v1',100000,130000,660000))
+legacy.execute("UPDATE translations SET translated_text=?,status='ready',origin='manual'",('{"welcome":"Preserved manual"}',))
+before=[dict(r) for r in legacy.execute('SELECT * FROM translations')]
+legacy.executescript(x['openai_migration'])
+assert [dict(r) for r in legacy.execute('SELECT * FROM translations')]==before
+assert legacy.execute('SELECT SUM(reservation_nano) FROM translation_attempts').fetchone()[0]==660000
+assert legacy.execute('SELECT provider_mode FROM translation_attempts').fetchone()[0]=='mock'
+assert legacy.execute('SELECT cost_nano FROM translation_attempts').fetchone()[0] is None
+print('PASS: OpenAI migration preserves manual mock rows and reservations; provenance and reconciliation parity')

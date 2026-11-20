@@ -137,9 +137,9 @@ test('file-backed local claims reload current state across independent adapters 
   assert.equal(await second.claim({...a,claim_id:'c',target_language:'de-DE'}),true);
  }finally{fs.rmSync(dir,{recursive:true,force:true});}
 });
-test('new translation HTTP access remains absent and public guest views stay read-only',async()=>{
+test('translation HTTP access requires authorization and public guest views stay read-only',async()=>{
  const {handleRequest}=await import('../src/worker.js');const {db}=await setup();
- assert.equal((await handleRequest(new Request('https://example.invalid/api/guides/'+id+'/translations',{method:'POST'}),{DB:db})).status,404);
+ assert.equal((await handleRequest(new Request('https://example.invalid/api/guides/'+id+'/translations',{method:'POST'}),{DB:db})).status,401);
  for(let i=0;i<3;i++){const response=await handleRequest(new Request('https://example.invalid/g/'+id),{DB:db});assert.equal(response.status,200);assert.match(await response.text(),/Welcome!/);}
 });
 async function readyCorrection(){

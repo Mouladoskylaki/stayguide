@@ -154,3 +154,18 @@ Phase 2B execution follow-up (2026-11-17): owner supplied exact inline authoriza
 ### SG-P31 Phase 3A — additive storage and mock-only foundation
 
 Owner authorizes translation source/version storage, additive D1 migrations, local adapter extensions, atomic claims/leases/reservations, conditional publication, cache/fallback, protected-field projection and offline tests. OpenAI gpt-6-luna Standard Global is selected; other provider comparisons stop. See [implementation and evidence](SG_P31_PHASE3A_FOUNDATION.md). Source language starts unknown, and UI catalogs stay separate. No real provider/credential/live database access, full UI, public generation endpoint, dependency installation, historical-evidence modification, commit/push or deployment. Implementation verified offline and ready for independent review; SG-P31 remains IN PROGRESS, not production-ready.
+
+
+### SG-P31 Phase 3B — real adapter and application wiring, offline only
+
+Owner authorizes the separate server-only gpt-6-luna Standard Global Responses adapter, authoritative count/output bounds, retained reservations/usage reconciliation, provenance migration draft, authenticated host operation and saved-only guest rendering. All provider tests use mocked HTTP; live execution defaults off. See [implementation, evidence and one-test requirements](SG_P31_PHASE3B_INTEGRATION.md). No real API/key access, paid usage, production migration, package installation, commit/push/deployment or automatic next phase. SG-P31 stays IN PROGRESS; offline implementation awaits independent review. After the first functional AI Translation experience, the mandatory comprehensive Product & Architecture Review precedes the next major feature; it does not block Phase 3B.
+
+
+### SG-P31 Phase 3B — controlled one-shot preparation (2026-11-18)
+
+Owner authorizes code/offline tests only for the [fixed H08 English→German harness](SG_P31_PHASE3B_ONE_SHOT.md) and the confirmed integration-test fixture correction. The harness reuses existing application/provider/storage code, defaults to dry-run, claims a permanent execution guard, restricts a new disposable DB to one attempt/$0.00066 and verifies persistence/cache/guest reads without extra calls. Live mode, real credentials/network/paid execution, production migrations, deployment, staging or commit/push are not authorized. Preparation is ready for independent review; SG-P31 remains IN PROGRESS and the Product & Architecture Review checkpoint is preserved.
+
+
+### SG-P31-P3B-FINAL-01 — post-live evidence finalization (2026-11-20)
+
+Owner authorizes documentation finalization and offline regression verification only. The separately authorized one-shot H08 en-GB→de-DE test succeeded with gpt-6-luna Standard Global: one count/one generation, 134 input/51 output/zero reasoning tokens, estimated $0.00003890 (conservative $0.00004279), retained $0.00066 reservation. The 6.429-second duration includes local verification. Database, journal and summary agree; persistence, cache reuse without additional calls and saved German guest SSR passed. [Final report/inventory and limitations](SG_P31_PHASE3B_INTEGRATION.md#sg-p31-p3b-final-01--post-live-finalization-and-review). Earlier offline/preparation sections are historical. The guard is consumed and evidence preserved; no further credential access, API/count calls, spending, implementation, production migration, staging/commit/push/deployment or Phase 3C is authorized. Owner acceptance remains pending; parent SG-P31 stays IN PROGRESS and all existing task/decision/completed statuses remain unchanged.
