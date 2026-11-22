@@ -4,6 +4,8 @@
 
 This file is authoritative for task definitions and acceptance criteria. See [ROADMAP.md](ROADMAP.md) for live statuses, dependency tracking and next steps, [PROGRESS.md](PROGRESS.md) for verification evidence, [DECISIONS.md](DECISIONS.md) for decisions, and [AGENTS.md](../AGENTS.md) for operating rules. Planned work is not implementation authorization.
 
+Current reconciliation (SG-PAR-02, 2026-11-22): dated phase/proposal entries below preserve historical authorization and findings. Current owner decisions and implementation state are Phase 3B checkpoint `46ea431`, D-009/D-022 and the [acceptance matrix](LAUNCH_ACCEPTANCE_MATRIX.md); earlier provider-unselected, research-only or acceptance-pending wording does not restart research or supersede them. Matrix thresholds and W1–W8 remain proposals; all existing parent task statuses are preserved.
+
 ## P0 — Repository and baseline
 - **SG-P00** (first): read-only audit of imported v0.2; inspect Git, code, routes, tests, security gaps, screenshot/reference mismatches. No code changes. Output audit report. Acceptance: actual test result, accurate inventory, risks, next proposed task.
 - **SG-P01**: minimal baseline fixes approved after audit, with tests. Acceptance: no regressions; diff reviewed.
@@ -24,7 +26,7 @@ This file is authoritative for task definitions and acceptance criteria. See [RO
 
 ## P3 — Feature completeness
 - **SG-P30**: photos, validation, size variants, storage decision.
-- **SG-P31**: multilingual architecture/cost comparison; implementation only after decision.
+- **SG-P31**: original multilingual architecture/cost-comparison scope progressed through owner-approved model/storage/integration decisions; bounded Phase 3B is accepted and checkpointed at `46ea431817c88f9f5d7e0ed2270f7462bef558fa`. Parent remains IN PROGRESS. D-022 selects the initial six-language milestone; [SG-PAR-02 matrix](LAUNCH_ACCEPTANCE_MATRIX.md) proposes remaining controlled-milestone versus full-launch acceptance. This does not authorize further implementation or provider comparison.
 - **SG-P32**: multiple-account property management, duplication, language settings.
 
 ## P4 — Commercial readiness
@@ -169,3 +171,10 @@ Owner authorizes code/offline tests only for the [fixed H08 English→German har
 ### SG-P31-P3B-FINAL-01 — post-live evidence finalization (2026-11-20)
 
 Owner authorizes documentation finalization and offline regression verification only. The separately authorized one-shot H08 en-GB→de-DE test succeeded with gpt-6-luna Standard Global: one count/one generation, 134 input/51 output/zero reasoning tokens, estimated $0.00003890 (conservative $0.00004279), retained $0.00066 reservation. The 6.429-second duration includes local verification. Database, journal and summary agree; persistence, cache reuse without additional calls and saved German guest SSR passed. [Final report/inventory and limitations](SG_P31_PHASE3B_INTEGRATION.md#sg-p31-p3b-final-01--post-live-finalization-and-review). Earlier offline/preparation sections are historical. The guard is consumed and evidence preserved; no further credential access, API/count calls, spending, implementation, production migration, staging/commit/push/deployment or Phase 3C is authorized. Owner acceptance remains pending; parent SG-P31 stays IN PROGRESS and all existing task/decision/completed statuses remain unchanged.
+
+
+### SG-PAR-02 — Launch Acceptance Matrix & Documentation Alignment (2026-11-22)
+
+Owner authorizes documentation only at Phase 3B checkpoint `46ea431817c88f9f5d7e0ed2270f7462bef558fa`. Explicit decision: Greek, English, German, French, Italian and Spanish are the initial intended validated Multilingual v1 milestone set, not a permanent restriction. Selection is approved; testing/quality validation is not complete. Preserve gpt-6-luna Standard Global, saved translations, zero paid generation from guest views in v1, mobile-first simplicity, €1/property/year target, approximately 24-hour signup-free trial and every approved public-v1 media/printable capability.
+
+Deliverable: [acceptance matrix](LAUNCH_ACCEPTANCE_MATRIX.md) separates controlled milestone A from full launch B, proposes measurable host/AI/correction/guest/UI/PDF/invalidation/quality/accessibility evidence, records unresolved owner decisions and W1–W8 dependency/risk-ordered work proposals. Numeric thresholds, sample sizes, regional locale mappings, policy/API/schema changes and sequencing are NOT APPROVED by this documentation task. No existing task status changes except current evidence alignment; parent SG-P31 stays IN PROGRESS. No frozen corpus, historical evidence, application, dependency or test modification; no provider call, credential access, paid service, production migration, commit/push/deployment or automatic next phase. STOP for owner review.

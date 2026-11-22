@@ -1,10 +1,10 @@
 # Architecture — provisional
 
-## Current prototype (verify in audit)
+## Current prototype — checkpoint 46ea431
 - `public/index.html`, `public/app.html`, `public/app.js`, `public/styles.css`: static host/marketing UI.
 - `src/worker.js`: Cloudflare Worker routes/API and SSR guest HTML.
 - `src/qr.js`: local QR SVG generator.
-- `schema.sql`: D1 guide records (JSON content).
+- `schema.sql` and numbered `migrations/`: guide JSON plus translation source/version, result/provenance, attempt/usage and policy storage. Local/SQLite verification does not certify actual D1 execution.
 - `node/server.mjs`, `node/db.mjs`: local Node preview adapter and local JSON persistence. NOT production architecture.
 - `tests/worker.test.js`: Node tests.
 
@@ -13,7 +13,8 @@ Cloudflare Workers + static assets + D1; R2 only if images justify it. SSR publi
 
 ## Routes (audit against code)
 - `POST /api/guides` create; `GET/PATCH /api/guides/:id` authenticated by temporary edit token.
-- `GET /g/:id` public guide; `/g/:id/qr.svg` QR; `/g/:id/card` printable HTML.
+- `GET /g/:id` public guide (optional saved-only `?lang=` projection); `/g/:id/qr.svg` QR; `/g/:id/card` printable HTML.
+- `POST/GET /api/guides/:id/translations`: existing owner-token checks before generation/read; no correction-editing HTTP operation or complete language UI yet. Guest views never trigger paid generation in v1.
 
 ## Hard boundaries
 Temporary edit token in localStorage is NOT production authentication. Public URL does not imply private data protection. Do not publish without proper accounts/sessions, ownership, rate limiting, trial expiry, upload validation, backups, privacy, billing verification, monitoring and deployment review.
@@ -29,7 +30,7 @@ Fast on moderate mobile; SSR readable with JS disabled; minimal JS and CSS; no e
 
 ## Future multilingual/media requirements — no architecture change (2026-11-15)
 
-[Owner-approved alignment](LAUNCH_MULTILINGUAL_ALIGNMENT.md) requires server-side AI requests, reusable saved translations keyed by property/language/section/source version, correction preservation and readable SSR fallback, with translated content reused by PDFs. These behaviors are not implemented; provider, cache/storage design, schema/API, concurrency/invalidation mechanism, photo processing/storage and RTL/font approach remain unselected. Existing local-browser PDF and guest architecture remain unchanged. SG-P31 research must precede provider decisions and separately authorized implementation.
+Historical planning at 2026-11-15: [owner-approved alignment](LAUNCH_MULTILINGUAL_ALIGNMENT.md) required server-side translation/cache/corrections/SSR/PDF reuse before those paths existed. Phase 3A/3B subsequently implemented the bounded storage and server/guest foundation below with the approved gpt-6-luna model. UI catalogs/choosers, translated PDFs, media and wider RTL/font support remain open. Do not read earlier unselected-provider or unimplemented-storage descriptions as current status.
 
 
 ## SG-P31 Phase 3A — owner-authorized mock-only foundation
@@ -40,3 +41,10 @@ OpenAI gpt-6-luna Standard Global is selected for v1. Additive D1 migrations/sou
 ## SG-P31 Phase 3B — adapter and controlled application integration
 
 [Phase 3B](SG_P31_PHASE3B_INTEGRATION.md) adds the server-only OpenAI adapter with default-off enablement and an unevaluated server credential callback, fixed Global endpoints, authoritative counting, deadlines/cancellation, no retries and usage reconciliation against retained reservations. Draft migration 0002 separates real/mock cache identities while preserving records. An owner-token-authenticated translation operation and saved-only guest ?lang rendering are implemented; no paid call occurs on guest views. Default Node preview has no live binding. Offline/mock and disposable SQLite verification is supplemented by one separately authorized H08 English→German live run using the existing application/service/adapter and a disposable local database. Saved/cache/guest SSR verification passed without further calls; normal application live enablement remains off and the one-shot authorization is consumed. Actual D1, privacy/account/quality and release gates remain. UI catalogs/choosers and translated PDF integration are not implemented.
+
+
+## SG-PAR-02 — milestone and production boundaries (2026-11-22)
+
+The [acceptance matrix](LAUNCH_ACCEPTANCE_MATRIX.md) proposes measurable criteria for the owner-selected Greek, English, German, French, Italian and Spanish milestone without changing runtime locale allowlists, APIs or storage. Future languages remain possible. Host interface locale, section source, guest target and print language must stay separate; no source-language assumption for legacy guides. No paid generation from guest views in v1. Full public launch retains all approved media/printable and commercial/security capabilities.
+
+Production gaps identified in SG-PAR-01 remain open: original guide PATCH has no source-version conflict condition (`src/worker.js`), whereas manual translation correction has CAS protection; fixture policy is eight lifetime attempts/$0.10 shared across the DB, not a production allocation; selected guest languages can require sequential per-section DB lookups; eligible prose may contain private data; valid saved fields may exceed translation bounds. No fix, queue/cache architecture, quota reset or public enablement is approved here. D1/runtime/restore/load verification, source conflict/API policy, account/trial/privacy/commercial design and media storage still require scoped decisions and evidence.
