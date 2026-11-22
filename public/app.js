@@ -1,7 +1,14 @@
+import {createHostI18n,HOST_LANGUAGES} from './host-i18n.js';
 import {previewWarning,qrFilename,qrPngBlob} from './qr-tools.js';
 import {FIELDS} from './guide-content.js';
 const STORAGE = 'stayguide-demo-properties';
 const ACTIVE = 'stayguide-demo-active';
+let hostStorage;try{hostStorage=globalThis.localStorage;}catch{/* Storage may be blocked by browser policy. */}
+const hostI18n=createHostI18n({storage:hostStorage,languages:navigator.languages||[navigator.language]});
+const t=(key,values)=>hostI18n.t(key,values);
+const ui=(selector,key,values)=>hostI18n.text($(selector),key,values);
+const tr=(key,values={})=>`<span data-i18n="${esc(key)}" data-i18n-values="${esc(JSON.stringify(values))}">${esc(t(key,values))}</span>`;
+
 // Local, decorative line icons. Section names remain the accessible labels.
 const SECTION_ICONS = {
   welcome:'<path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5Z"/>',
@@ -83,7 +90,7 @@ function persist(){
 }
 $('#retry-state').addEventListener('click',restoreState);
 $('#reset-state').addEventListener('click',()=>{
-  if(!confirm('Keep a recovery copy in this browser and start a new property list? Existing guides will not be deleted from the server.'))return;
+  if(!confirm(t('Keep a recovery copy in this browser and start a new property list? Existing guides will not be deleted from the server.')))return;
   try{
     // Copy exact original strings before replacing either working key. Never log them.
     const backup={properties:localStorage.getItem(STORAGE),active:localStorage.getItem(ACTIVE)};
@@ -93,11 +100,11 @@ $('#reset-state').addEventListener('click',()=>{
     localStorage.setItem(STORAGE,'[]');localStorage.setItem(ACTIVE,'');
     restoreState();
   }catch{
-    $('#recovery-message').textContent='Browser storage could not be updated. No recovery copy has been removed. Allow browser storage or free some space, then try again.';
+    hostI18n.text($('#recovery-message'),"Browser storage could not be updated. No recovery copy has been removed. Allow browser storage or free some space, then try again.");
     showRecovery();
   }
 });
-function showEmpty(){ $('#empty-state').hidden=false;$('#editor-shell').hidden=true;clearGuidePresentation();}
+function showEmpty(){ ui('#empty-state h2',"Let's make your first guide.");ui('#empty-state p','No signup, no complicated setup. Just a lovely place to start.');$('#empty-state').hidden=false;$('#editor-shell').hidden=true;clearGuidePresentation();}
 function showEditor(){ $('#empty-state').hidden=true;$('#editor-shell').hidden=false;revealPropertyTab();}
 function updatePropertyScroll(){
   const host=$('#property-tabs');
@@ -125,23 +132,23 @@ function clearGuidePresentation(){
   closeQr();
   $('#open-qr').disabled=true;
   $('#qr-preview').removeAttribute('src');$('#qr-destination').removeAttribute('href');
-  $('#qr-destination').textContent='';$('#qr-property-name').textContent='';
+  hostI18n.text($('#qr-destination'),'');hostI18n.text($('#qr-property-name'),'');
   $('#guide-progress').hidden=true;
-  $('#progress-summary').textContent='';$('#progress-counts').textContent='';
+  hostI18n.text($('#progress-summary'),'');hostI18n.text($('#progress-counts'),'');
   $('#section-progress').value=0;$('#progress-checklist').replaceChildren();
-  $('#card-preview-name').textContent='';$('#card-preview-qr').removeAttribute('src');
+  hostI18n.text($('#card-preview-name'),'');$('#card-preview-qr').removeAttribute('src');
   $('#property-identity').textContent='·';$('#property-identity').removeAttribute('data-tone');
-  $('#card-counter').textContent='Loading sections…';
+  hostI18n.text($('#card-counter'),"Loading sections…");
   for(const id of ['view-link','download-qr','print-card']){
     $('#'+id).removeAttribute('href');$('#'+id).setAttribute('aria-disabled','true');
   }
-  $('#copy-link').disabled=true;$('#copy-link').textContent='Copy guest link';
+  $('#copy-link').disabled=true;hostI18n.text($('#copy-link'),"Copy guest link");
   $('#editor-grid').querySelectorAll('button').forEach(button=>{
     button.disabled=true;button.setAttribute('data-state','loading');button.removeAttribute('aria-label');
-    const state=button.querySelector('.editor-card-state');if(state)state.textContent='Loading…';
+    const state=button.querySelector('.editor-card-state');if(state)hostI18n.text(state,"Loading…");
   });
 }
-function setStatus(msg){ $('#save-status').textContent=msg; }
+function setStatus(msg){ ui('#save-status',msg); }
 async function api(path,options={}){
   const response=await fetch(path,{...options,headers:{'Content-Type':'application/json',...(options.headers||{})}});
   const data=await response.json();if(!response.ok){const error=new Error(data.error||'Something went wrong');error.status=response.status;throw error;}return data;
@@ -164,7 +171,7 @@ async function loadActive(){
   if(!entry){showEmpty();return;}
   const isCurrent=()=>version===loadVersion&&activeId===entry.id&&!storageProblem;
   $('#editor-shell').setAttribute('aria-busy','true');
-  $('#property-heading').textContent='Loading guide…';setStatus('Loading…');
+  hostI18n.text($('#property-heading'),"Loading guide…");setStatus('Loading…');
   try{
     const d=await api(`/api/guides/${entry.id}`,{headers:{Authorization:`Bearer ${entry.token}`}});
     if(!isCurrent())return;
@@ -172,15 +179,15 @@ async function loadActive(){
     current=d.guide;currentRevision=d.revision;render();if(!storageProblem)showEditor();
   }catch{
     if(!isCurrent())return;
-    showEmpty();$('#empty-state h2').textContent='This guide is unavailable.';
-    $('#empty-state p').textContent='Please reload to try again. Your saved property list has not been removed.';
+    showEmpty();hostI18n.text($('#empty-state h2'),"This guide is unavailable.");
+    hostI18n.text($('#empty-state p'),"Please reload to try again. Your saved property list has not been removed.");
   }finally{if(isCurrent())$('#editor-shell').removeAttribute('aria-busy');}
 }
 function render(){
   if($('#qr-workspace').open)closeQr();
   const host=$('#property-tabs'),restoreTabFocus=document.activeElement?.parentElement===host;host.replaceChildren();
   guides.forEach((g,index)=>{
-    const selected=g.id===activeId,name=selected?current.property_name:(g.label||`Property ${index+1}`);
+    const selected=g.id===activeId,name=selected?current.property_name:(g.label||t('Property {number}',{number:index+1}));
     const b=document.createElement('button');b.type='button';b.className='property-tab'+(selected?' active':'');
     b.setAttribute('data-guide-id',g.id);b.setAttribute('data-tone',identityTone(g.id));
     b.setAttribute('aria-pressed',String(selected));b.setAttribute('aria-label',name);b.title=name;
@@ -190,36 +197,36 @@ function render(){
     b.addEventListener('click',()=>{activeId=g.id;if(persist())loadActive();});host.append(b);
   });
   const entry=getEntry();entry.label=current.property_name;if(!persist())return;
-  $('#property-heading').textContent=current.property_name;
+  $('#property-heading').removeAttribute('data-i18n');$('#property-heading').textContent=current.property_name;
   $('#property-identity').textContent=propertyInitials(current.property_name);
   $('#property-identity').setAttribute('data-tone',identityTone(activeId));
   const link=`${location.origin}/g/${activeId}`;
   $('#view-link').href=link;$('#download-qr').href=`/g/${activeId}/qr.svg`;$('#print-card').href=`/g/${activeId}/card`;
   for(const id of ['view-link','download-qr','print-card'])$('#'+id).removeAttribute('aria-disabled');
-  $('#copy-link').disabled=false;$('#copy-link').textContent='Copy guest link';
+  $('#copy-link').disabled=false;hostI18n.text($('#copy-link'),"Copy guest link");
   $('#open-qr').disabled=false;$('#download-qr').download=qrFilename(current.property_name,'svg');
   const grid=$('#editor-grid');grid.replaceChildren();
   for(const sec of FIELDS){
     const state=sectionState(sec,current),label={empty:'Empty',started:'Started',complete:'Complete'}[state];
     const b=document.createElement('button');b.type='button';b.className='editor-card';
     b.setAttribute('data-section',sec.id);b.setAttribute('data-state',state);
-    b.setAttribute('aria-label',`${sec.title}: ${label}. ${state==='empty'?'Add information':'Edit section'}`);
-    b.innerHTML=`<span class="editor-icon">${sectionIcon(sec.id)}</span><span class="editor-card-copy"><strong>${esc(sec.title)}</strong><small>${esc(sec.hint)}</small></span><span class="editor-card-footer"><span class="editor-card-state">${sectionStatusMark(state)}${label}</span><span class="editor-card-action">${state==='empty'?'Add':'Edit'} <span aria-hidden="true">→</span></span></span>`;
+    hostI18n.text(b,'{section}: {state}. {action}',{section:{key:sec.title},state:{key:label},action:{key:state==='empty'?'Add information':'Edit section'}},'aria-label');
+    b.innerHTML=`<span class="editor-icon">${sectionIcon(sec.id)}</span><span class="editor-card-copy"><strong>${tr(sec.title)}</strong><small>${tr(sec.hint)}</small></span><span class="editor-card-footer"><span class="editor-card-state">${sectionStatusMark(state)}${tr(label)}</span><span class="editor-card-action">${tr(state==='empty'?'Add':'Edit')} <span aria-hidden="true">→</span></span></span>`;
     b.addEventListener('click',()=>openEditor(sec,b));grid.append(b);
   }
   const checklist=$('#progress-checklist');checklist.replaceChildren();
   for(const sec of FIELDS){
     const state=sectionState(sec,current),item=document.createElement('li');
     item.setAttribute('data-section',sec.id);item.setAttribute('data-state',state);
-    item.innerHTML=`${sectionStatusMark(state)}<span>${esc(sec.title)}</span><small>${{complete:'Complete',started:'Started',empty:'Empty'}[state]}</small>`;
+    item.innerHTML=`${sectionStatusMark(state)}<span>${tr(sec.title)}</span><small>${tr({complete:'Complete',started:'Started',empty:'Empty'}[state])}</small>`;
     checklist.append(item);
   }
   const progress=guideProgress(current);
-  $('#progress-summary').textContent=`${progress.complete} of ${progress.total} sections complete`;
-  $('#progress-counts').textContent=`${progress.started} started · ${progress.empty} empty`;
+  ui('#progress-summary','{complete} of {total} sections complete',progress);
+  ui('#progress-counts','{started} started · {empty} empty',progress);
   $('#section-progress').max=progress.total;$('#section-progress').value=progress.complete;
   $('#guide-progress').hidden=false;
-  $('#card-counter').textContent=`${FIELDS.length} editable sections`;
+  ui('#card-counter','{count} editable sections',{count:FIELDS.length});
   if(restoreTabFocus)host.querySelector('.property-tab.active')?.focus({preventScroll:true});
   revealPropertyTab();
   setStatus('All changes saved');
@@ -238,9 +245,9 @@ function setEditorSaving(saving){
   editorSaving=saving;
   $('#drawer-fields').disabled=saving;
   for(const id of ['save-editor','cancel-editor','close-drawer'])$('#'+id).disabled=saving||(id==='save-editor'&&editorConflict);
-  $('#save-editor').textContent=saving?'Saving…':'Save changes';
+  ui('#save-editor',saving?'Saving…':'Save changes');
   $('#section-form').setAttribute('aria-busy',String(saving));
-  $('#editor-status').textContent=saving?'Saving your changes. Please wait.':'';
+  ui('#editor-status',saving?'Saving your changes. Please wait.':'');
   if(saving)$('#editor-status').focus({preventScroll:true});
 }
 function openEditor(section,opener){
@@ -248,10 +255,10 @@ function openEditor(section,opener){
   editorVersion++;
   editing=section;editorOpener=opener;editorConflict=false;
   initialFields=Object.fromEntries(section.fields.map(([key,,type])=>[key,type==='textarea'?String(current[key]||'').replace(/\r\n?/g,'\n'):String(current[key]||'').replace(/[\r\n]/g,'')]));
-  $('#drawer-title').textContent=section.title;
-  $('#drawer-description').textContent=section.hint;
-  $('#drawer-fields').innerHTML=section.fields.map(([key,label,type,hint])=>`<div class="form-field"><label for="edit-${key}">${esc(label)}</label>${type==='textarea'?`<textarea id="edit-${key}" name="${key}" placeholder="${esc(hint)}" rows="5">${esc(initialFields[key])}</textarea>`:`<input id="edit-${key}" name="${key}" type="text" value="${esc(initialFields[key])}" placeholder="${esc(hint)}" ${key==='property_name'?'required maxlength="80"':''}>`}</div>`).join('');
-  $('#editor-error').hidden=true;$('#editor-error').textContent='';
+  ui('#drawer-title',section.title);
+  ui('#drawer-description',section.hint);
+  $('#drawer-fields').innerHTML=section.fields.map(([key,label,type,hint])=>`<div class="form-field"><label for="edit-${key}">${tr(label)}</label>${type==='textarea'?`<textarea id="edit-${key}" name="${key}" placeholder="${esc(t(hint))}" data-i18n-placeholder="${esc(hint)}" rows="5">${esc(initialFields[key])}</textarea>`:`<input id="edit-${key}" name="${key}" type="text" value="${esc(initialFields[key])}" placeholder="${esc(t(hint))}" data-i18n-placeholder="${esc(hint)}" ${key==='property_name'?'required maxlength="80"':''}>`}</div>`).join('');
+  $('#editor-error').hidden=true;hostI18n.text($('#editor-error'),'');
   setEditorSaving(false);
   const drawer=$('#editor-drawer');drawer.hidden=false;drawer.showModal();
   drawer.querySelector('input,textarea')?.focus();
@@ -290,7 +297,7 @@ $('#section-form').addEventListener('submit',async e=>{
   e.preventDefault();if(!editing||!current||storageProblem||editorSaving||editorConflict||!isGuideRevision(currentRevision))return;
   const patch=editorValues(),sectionId=editing.id;
   if('property_name' in patch&&!patch.property_name.trim()){
-    $('#editor-error').textContent='Please enter a property name.';
+    hostI18n.text($('#editor-error'),"Please enter a property name.");
     $('#editor-error').hidden=false;$('#edit-property_name').focus();return;
   }
   const entry=getEntry(),version=loadVersion,drawer=editorVersion,save=++saveVersion;
@@ -306,7 +313,7 @@ $('#section-form').addEventListener('submit',async e=>{
     if(isCurrent()){
       if(error.status===409)editorConflict=true;
       setEditorSaving(false);
-      $('#editor-error').textContent=editorConflict?'This guide was updated in another tab or device. Your text is still here and has not been saved. Copy your changes somewhere safe, then close this editor and reload the guide to review the latest version. We will not overwrite it.':'Your changes couldn’t be saved. They are still here. Check your connection and choose Save changes to try again.';
+      ui('#editor-error',editorConflict?'This guide was updated in another tab or device. Your text is still here and has not been saved. Copy your changes somewhere safe, then close this editor and reload the guide to review the latest version. We will not overwrite it.':'Your changes couldn’t be saved. They are still here. Check your connection and choose Save changes to try again.');
       $('#editor-error').hidden=false;$('#editor-error').focus();
     }
   }finally{if(save===saveVersion)setEditorSaving(false);}
@@ -327,7 +334,7 @@ $('#discard-dialog').addEventListener('cancel',e=>{e.preventDefault();keepEditin
 // Native modal dialogs make the background inert; explicitly wrap Tab at the boundaries.
 for(const id of ['editor-drawer','discard-dialog','qr-workspace'])$('#'+id).addEventListener('keydown',e=>{
   if(e.key!=='Tab')return;
-  const controls=[...$('#'+id).querySelectorAll('button,input,textarea,a[href],[tabindex]')].filter(el=>!el.matches(':disabled')&&el.tabIndex>=0&&el.getClientRects().length);
+  const controls=[...$('#'+id).querySelectorAll('button,input,textarea,select,a[href],[tabindex]')].filter(el=>!el.matches(':disabled')&&el.tabIndex>=0&&el.getClientRects().length);
   const first=controls[0],last=controls.at(-1);
   if(!first){e.preventDefault();return;}
   if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}
@@ -338,21 +345,21 @@ function closeQr(restoreFocus=false){
   resetBook();
   const opener=qrOpener;qrOpener=null;
   $('#qr-workspace').close();$('#qr-workspace').hidden=true;
-  $('#download-png').disabled=false;$('#download-png').textContent='Download QR';
-  $('#qr-download-status').textContent='';$('#qr-download-error').hidden=true;
+  $('#download-png').disabled=false;hostI18n.text($('#download-png'),"Download QR");
+  hostI18n.text($('#qr-download-status'),'');$('#qr-download-error').hidden=true;
   document.body.classList.remove('qr-open');
   if(restoreFocus&&opener?.isConnected)opener.focus({preventScroll:true});
 }
 $('#open-qr').addEventListener('click',()=>{
   if(!current||storageProblem)return;
   qrOpener=$('#open-qr');qrVersion++;
-  $('#qr-property-name').textContent=current.property_name;
-  resetBook();$('#book-property-name').textContent='For '+current.property_name;
-  $('#card-preview-name').textContent=current.property_name;$('#card-preview-qr').src='/g/'+activeId+'/qr.svg';
+  $('#qr-property-name').removeAttribute('data-i18n');$('#qr-property-name').textContent=current.property_name;
+  resetBook();ui('#book-property-name','For {name}',{name:current.property_name});
+  $('#card-preview-name').removeAttribute('data-i18n');$('#card-preview-name').textContent=current.property_name;$('#card-preview-qr').src='/g/'+activeId+'/qr.svg';
   const link=location.origin+'/g/'+activeId;
-  $('#qr-destination').href=link;$('#qr-destination').textContent=link;
-  const warning=previewWarning(link);$('#qr-url-warning').textContent=warning;$('#qr-url-warning').hidden=!warning;
-  $('#qr-preview').src='/g/'+activeId+'/qr.svg';$('#qr-preview').alt='QR code for '+current.property_name+' guest guide';
+  $('#qr-destination').href=link;$('#qr-destination').removeAttribute('data-i18n');$('#qr-destination').textContent=link;
+  const warning=previewWarning(link);ui('#qr-url-warning',warning);$('#qr-url-warning').hidden=!warning;
+  $('#qr-preview').src='/g/'+activeId+'/qr.svg';hostI18n.text($('#qr-preview'),'QR code for {name} guest guide',{name:current.property_name},'alt');
   $('#qr-workspace').hidden=false;$('#qr-workspace').showModal();
   $('#qr-workspace .qr-workspace-body').scrollTop=0;
   document.body.classList.add('qr-open');$('#close-qr').focus();
@@ -364,15 +371,15 @@ $('#qr-workspace').addEventListener('pointerdown',e=>{qrBackdrop=e.target===$('#
 $('#qr-workspace').addEventListener('click',e=>{if(qrBackdrop&&e.target===$('#qr-workspace')&&outsideDrawer(e,$('#qr-workspace')))closeQr(true);qrBackdrop=false;});
 $('#qr-preview').addEventListener('error',()=>{
   if($('#qr-workspace').open&&$('#qr-preview').complete&&!$('#qr-preview').naturalWidth){
-    $('#qr-download-error').textContent='The QR preview couldn’t load. Close and reopen this workspace to retry, or open the welcome card.';$('#qr-download-error').hidden=false;
+    hostI18n.text($('#qr-download-error'),"The QR preview couldn’t load. Close and reopen this workspace to retry, or open the welcome card.");$('#qr-download-error').hidden=false;
   }
 });
 $('#download-png').addEventListener('click',async()=>{
   if(!current||storageProblem||!$('#qr-workspace').open||$('#download-png').disabled)return;
   const id=activeId,name=current.property_name,load=loadVersion,version=qrVersion;
   const isCurrent=()=>current&&!storageProblem&&activeId===id&&load===loadVersion&&version===qrVersion&&$('#qr-workspace').open;
-  $('#download-png').disabled=true;$('#download-png').textContent='Preparing…';
-  $('#qr-download-error').hidden=true;$('#qr-download-status').textContent='Preparing your PNG image…';
+  $('#download-png').disabled=true;hostI18n.text($('#download-png'),"Preparing…");
+  $('#qr-download-error').hidden=true;hostI18n.text($('#qr-download-status'),"Preparing your PNG image…");
   try{
     // Same-origin preview authentication may still apply; no owner-token header is attached.
     const response=await fetch('/g/'+id+'/qr.svg',{credentials:'same-origin',cache:'no-store'});
@@ -383,20 +390,20 @@ $('#download-png').addEventListener('click',async()=>{
     const url=URL.createObjectURL(png),link=document.createElement('a');
     link.href=url;link.download=qrFilename(name,'png');document.body.append(link);link.click();link.remove();
     setTimeout(()=>URL.revokeObjectURL(url),1000);
-    $('#qr-download-status').textContent='Your PNG download is ready. If it didn’t save, try again or use SVG.';
+    hostI18n.text($('#qr-download-status'),"Your PNG download is ready. If it didn’t save, try again or use SVG.");
   }catch{
     if(isCurrent()){
-      $('#qr-download-status').textContent='';$('#qr-download-error').textContent='Your QR image couldn’t be downloaded. Try Download QR again, or choose Download SVG.';
+      hostI18n.text($('#qr-download-status'),'');hostI18n.text($('#qr-download-error'),"Your QR image couldn’t be downloaded. Try Download QR again, or choose Download SVG.");
       $('#qr-download-error').hidden=false;$('#qr-download-error').focus();
     }
-  }finally{if(isCurrent()){$('#download-png').disabled=false;$('#download-png').textContent='Download QR';}}
+  }finally{if(isCurrent()){$('#download-png').disabled=false;hostI18n.text($('#download-png'),"Download QR");}}
 });
 // PDF code/font payloads are requested only by an explicit export action.
 let bookTools;
 function resetBook(){
-  $('#book-controls').disabled=false;$('#download-book').textContent='Download PDF';
-  $('#book-form').removeAttribute('aria-busy');$('#book-status').textContent='';
-  $('#book-error').textContent='';$('#book-error').hidden=true;$('#book-property-name').textContent='';
+  $('#book-controls').disabled=false;hostI18n.text($('#download-book'),"Download PDF");
+  $('#book-form').removeAttribute('aria-busy');hostI18n.text($('#book-status'),'');
+  hostI18n.text($('#book-error'),'');$('#book-error').hidden=true;hostI18n.text($('#book-property-name'),'');
 }
 $('#book-form').addEventListener('submit',async event=>{
   event.preventDefault();
@@ -404,8 +411,8 @@ $('#book-form').addEventListener('submit',async event=>{
   const model=current,id=activeId,load=loadVersion,version=qrVersion;
   const size=new FormData($('#book-form')).get('book-size');
   const isCurrent=()=>current===model&&activeId===id&&loadVersion===load&&qrVersion===version&&!storageProblem&&!editing&&!editorSaving&&$('#qr-workspace').open;
-  $('#book-controls').disabled=true;$('#download-book').textContent='Preparing…';$('#book-form').setAttribute('aria-busy','true');
-  $('#book-error').hidden=true;$('#book-status').textContent='Preparing your saved Welcome Book…';
+  $('#book-controls').disabled=true;hostI18n.text($('#download-book'),"Preparing…");$('#book-form').setAttribute('aria-busy','true');
+  $('#book-error').hidden=true;hostI18n.text($('#book-status'),"Preparing your saved Welcome Book…");
   try{
     if(!bookTools)bookTools=import('./welcome-book.js').catch(error=>{bookTools=null;throw error;});
     const tools=await bookTools;if(!isCurrent())return;
@@ -416,22 +423,23 @@ $('#book-form').addEventListener('submit',async event=>{
     const url=URL.createObjectURL(result.blob),link=document.createElement('a');
     link.href=url;link.download=tools.bookFilename(snapshot.name,size);document.body.append(link);link.click();link.remove();
     setTimeout(()=>URL.revokeObjectURL(url),30000);
-    $('#book-status').textContent='Your '+size+' PDF download is ready. If it did not save, choose Download PDF again.';
+    ui('#book-status','Your {size} PDF download is ready. If it did not save, choose Download PDF again.',{size});
   }catch(error){
     if(isCurrent()){
       const tools=await bookTools?.catch(()=>null);
       if(!isCurrent())return;
-      $('#book-status').textContent='';
-      $('#book-error').textContent=tools&&error instanceof tools.BookContentError?error.message:'Your book could not be prepared. Check your connection and choose Download PDF to retry. No saved content was changed.';
+      hostI18n.text($('#book-status'),'');
+      const message=tools&&error instanceof tools.BookContentError?hostBookError(error.message):{key:'Your book could not be prepared. Check your connection and choose Download PDF to retry. No saved content was changed.'};
+      ui('#book-error',message.key,message.values);
       $('#book-error').hidden=false;$('#book-error').focus();
     }
-  }finally{if(isCurrent()){$('#book-controls').disabled=false;$('#download-book').textContent='Download PDF';$('#book-form').removeAttribute('aria-busy');}}
+  }finally{if(isCurrent()){$('#book-controls').disabled=false;hostI18n.text($('#download-book'),"Download PDF");$('#book-form').removeAttribute('aria-busy');}}
 });
 $('#create-form').addEventListener('submit',async e=>{
   e.preventDefault();const name=$('#first-name').value.trim();if(!name)return;
-  const btn=$('#create-form button');btn.disabled=true;btn.textContent='Creating…';
+  const btn=$('#create-form button');btn.disabled=true;hostI18n.text(btn,"Creating…");
   try{await createGuide({property_name:name});$('#first-name').value='';}
-  catch(err){alert(err.message);}finally{btn.disabled=false;btn.textContent='Create my guide ↗';}
+  catch{alert(t('Your guide could not be created. Check your connection and try again.'));}finally{btn.disabled=false;hostI18n.text(btn,"Create my guide ↗");}
 });
 function newProperty(){if(storageProblem)return;loadVersion++;current=null;closeEditor();showEmpty();$('#first-name').focus();}
 $('#new-property').addEventListener('click',newProperty);
@@ -439,7 +447,42 @@ $('#copy-link').addEventListener('click',async()=>{
   if(!current||storageProblem)return;
   const id=activeId,version=loadVersion,link=`${location.origin}/g/${id}`;
   const isCurrent=()=>current&&!storageProblem&&activeId===id&&loadVersion===version;
-  try{await navigator.clipboard.writeText(link);if(isCurrent())$('#copy-link').textContent='Copied ✓';}
-  catch{if(isCurrent())prompt('Copy your guest link:',link);}
+  try{await navigator.clipboard.writeText(link);if(isCurrent())hostI18n.text($('#copy-link'),"Copied ✓");}
+  catch{if(isCurrent())prompt(t('Copy your guest link:'),link);}
 });
+
+function hostBookError(message){
+  const direct=['The guest guide destination could not be verified. Reopen QR & print.','Save a property name before exporting.','Saved guest content contains owner editing credentials. Remove them before exporting.'];
+  if(direct.includes(message))return {key:message};
+  for(const section of FIELDS)for(const [,label] of section.fields){
+    const prefix=label+' contains characters unsupported by the book font (';
+    if(message.startsWith(prefix))return {key:'{field} contains characters unsupported by the book font ({codes}). Edit that saved field and use supported text. Nothing was removed or replaced.',values:{field:{key:label},codes:message.slice(prefix.length).split(').')[0]}};
+    if(message.startsWith(label+' may contain private access or authentication information.'))return {key:'{field} may contain private access or authentication information. Remove it from the saved guest content before exporting; share private arrival instructions separately.',values:{field:{key:label}}};
+  }
+  return {key:'Your book could not be prepared. Check your connection and choose Download PDF to retry. No saved content was changed.'};
+}
+function applyHostLanguage(){
+  hostI18n.apply(document);
+  for(const select of document.querySelectorAll?.('[data-host-language]')||[])select.value=hostI18n.locale;
+  // Unnamed tabs have translated fallbacks; named property text is never translated.
+  for(const button of $('#property-tabs').querySelectorAll('button')){
+    const index=guides.findIndex(g=>g.id===button.getAttribute('data-guide-id')),guide=guides[index];
+    if(!guide||guide.label||guide.id===activeId)continue;
+    const name=t('Property {number}',{number:index+1});button.setAttribute('aria-label',name);button.title=name;
+    const label=button.querySelector('.property-tab-label');if(label)label.textContent=name;
+  }
+  revealPropertyTab();sizeEditor();
+}
+for(const select of document.querySelectorAll?.('[data-host-language]')||[]){
+  for(const [locale,name] of Object.entries(HOST_LANGUAGES)){
+    const option=document.createElement('option');option.value=locale;option.lang=locale;option.textContent=name;select.append(option);
+  }
+  select.addEventListener('change',()=>{
+    const result=hostI18n.setLocale(select.value);if(!result.changed){select.value=hostI18n.locale;return;}
+    applyHostLanguage();
+    const status=select.closest('dialog')?.querySelector('[data-language-status]')||$('#host-language-status');
+    hostI18n.text(status,result.persisted?'Interface language changed.':'Language changed for this visit. Your browser could not save the preference.');
+  });
+}
+applyHostLanguage();
 restoreState();

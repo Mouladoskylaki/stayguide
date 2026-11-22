@@ -1,6 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
+import {createHostI18n,HOST_LANGUAGES} from '../public/host-i18n.js';
 import fs from 'node:fs';
 
 const helpers=fs.readFileSync(new URL('../public/qr-tools.js',import.meta.url),'utf8').replaceAll('export ','');
@@ -36,7 +37,7 @@ function dashboard(initial={},options={}){
     setItem(key,value){if(options.writeFailure||writes.length===options.failAfter)throw Error('private storage details');values.set(key,String(value));writes.push(key);}
   };
   const context=vm.createContext({
-    URL,document:{querySelector:element,createElement:()=>new Element(),body:new Element(),addEventListener(){}},
+    URL,createHostI18n,HOST_LANGUAGES,document:{documentElement:{lang:"en-GB"},querySelectorAll:()=>[...nodes.values()].filter(n=>Object.keys(n.attributes).some(a=>a.startsWith("data-i18n"))),querySelector:element,createElement:()=>new Element(),body:new Element(),addEventListener(){}},
     localStorage,location:{origin:'http://localhost'},navigator:{clipboard:{writeText:options.writeClipboard||(async()=>{})}},
     confirm:()=>options.confirm!==false,alert:msg=>alerts.push(msg),prompt:msg=>prompts.push(msg),
     FormData:class {get(key){return options.form?.[key]??'';}},
@@ -462,4 +463,38 @@ test('known owner credentials pasted into a Wi-Fi field cannot enter the PDF gen
  d.run('bookTools=Promise.resolve({BookContentError:class extends Error{},bookSnapshot(){throw Error("must not project")},generateBook(){throw Error("must not generate")}})');
  await d.element('#book-form').listeners.submit({preventDefault(){}});
  assert.ok(d.element('#book-error').textContent.includes('owner editing credentials'));assert.ok(!d.element('#book-error').textContent.includes(a.token));assert.equal(d.element('#book-controls').disabled,false);
+});
+
+test('host locale switching retains actual editor draft, identity, revision and property storage with zero requests',async()=>{
+ const d=await loaded();d.element('#editor-grid').children[1].click();d.options.form={wifi_name:'Unsaved Wi-Fi draft',wifi_password:'Synthetic draft'};
+ const before=d.run('JSON.stringify({guides,current,currentRevision,activeId,initialFields,editorVersion,saveVersion,loadVersion,qrVersion})'),requests=d.requests.length,writes=d.writes.length,opener=d.run('editorOpener');
+ for(const locale of ['el-GR','de-DE','fr-FR','it-IT','es-ES','en-GB']){
+  d.run('hostI18n.setLocale('+JSON.stringify(locale)+');applyHostLanguage()');
+  assert.equal(d.run('JSON.stringify({guides,current,currentRevision,activeId,initialFields,editorVersion,saveVersion,loadVersion,qrVersion})'),before);
+  assert.equal(d.element('#editor-drawer').open,true);assert.equal(d.run('editorOpener'),opener);assert.equal(d.options.form.wifi_name,'Unsaved Wi-Fi draft');assert.equal(d.requests.length,requests);
+  assert.equal(d.element('#save-editor').textContent,d.run('t("Save changes")'));
+ }
+ assert.deepEqual(d.writes.slice(writes),Array(6).fill('stayguide-host-locale'));
+});
+test('locale repaint keeps conflict draft and rejection state; save remains blocked',async()=>{
+ const d=await loaded();d.element('#editor-grid').children[1].click();d.options.form={wifi_name:'Conflict draft'};
+ const saving=d.element('#section-form').listeners.submit({preventDefault(){}});d.requests[1].reply({error:'conflict'},false,409);await saving;
+ d.run('hostI18n.setLocale("el-GR");applyHostLanguage()');assert.equal(d.run('editorConflict'),true);assert.equal(d.element('#save-editor').disabled,true);assert.equal(d.options.form.wifi_name,'Conflict draft');
+ assert.match(d.element('#editor-error').textContent,/άλλη καρτέλα/);await d.element('#section-form').listeners.submit({preventDefault(){}});assert.equal(d.requests.length,2);
+});
+test('locale repaint during a pending save preserves operation and sends original content only',async()=>{
+ const d=await loaded();d.element('#editor-grid').children[1].click();d.options.form={wifi_name:'Authored network'};
+ const saving=d.element('#section-form').listeners.submit({preventDefault(){}});d.run('hostI18n.setLocale("de-DE");applyHostLanguage()');
+ assert.equal(d.run('editorSaving'),true);assert.equal(d.element('#save-editor').disabled,true);assert.equal(d.element('#save-editor').textContent,'Wird gespeichert…');
+ assert.equal(JSON.parse(d.requests[1].init.body).wifi_name,'Authored network');d.requests[1].reply({...response(a,'Alpha'),revision:'2'.repeat(64)});await saving;
+ assert.equal(d.run('currentRevision'),'2'.repeat(64));assert.equal(d.element('#save-status').textContent,'Alle Änderungen gespeichert');
+});
+test('host PDF validation errors localize field names and details without exposing unknown exceptions',()=>{
+ const d=dashboard();d.run('hostI18n.setLocale("el-GR")');
+ const errors=[
+  'Property name contains characters unsupported by the book font (U+1F600). Edit that saved field and use supported text. Nothing was removed or replaced.',
+  'Property name may contain private access or authentication information. Remove it from the saved guest content before exporting; share private arrival instructions separately.'
+ ];
+ for(const message of errors){d.run('const e'+errors.indexOf(message)+'=hostBookError('+JSON.stringify(message)+');ui("#book-error",e'+errors.indexOf(message)+'.key,e'+errors.indexOf(message)+'.values)');assert.match(d.element('#book-error').textContent,/Όνομα καταλύματος/);assert(!d.element('#book-error').textContent.includes('Property name'));}
+ d.run('const unknown=hostBookError("SYNTHETIC_PRIVATE_DB_ERROR");ui("#book-error",unknown.key,unknown.values)');assert(!d.element('#book-error').textContent.includes('SYNTHETIC_PRIVATE_DB_ERROR'));
 });

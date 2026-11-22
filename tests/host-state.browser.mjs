@@ -12,6 +12,7 @@ import {createLocalDb} from '../node/db.mjs';
 import {checkGuest} from './guest.browser.mjs';
 import {checkQrPrint} from './qr-print.browser.mjs';
 import {checkWelcomeBook} from './welcome-book.browser.mjs';
+import {checkHostLocalization} from './host-i18n.browser.mjs';
 import {checkHostWorkspace} from './host-workspace.browser.mjs';
 
 const root=new URL('../public/',import.meta.url);
@@ -30,7 +31,7 @@ const server=http.createServer(async(req,res)=>{
       if(pathname==='/baseline-app.js')return new Response(baselineAppJs,{headers:{'Content-Type':'text/javascript'}});
       if(pathname==='/baseline-host.css')return new Response(baselineHostCss,{headers:{'Content-Type':'text/css'}});
       if(pathname==='/baseline.css')return new Response(baselineCss,{headers:{'Content-Type':'text/css'}});
-      if(!/^\/(?:vendor\/)?[a-z0-9.-]+$/.test(pathname))return new Response('Not found',{status:404});
+      if(!/^\/(?:vendor\/)?[a-z0-9.-]+$/.test(pathname)&&!/^\/locales\/(?:el-GR|en-GB|de-DE|fr-FR|it-IT|es-ES)\.js$/.test(pathname))return new Response('Not found',{status:404});
       try{
         const type=pathname.endsWith('.css')?'text/css':pathname.endsWith('.js')?'text/javascript':'text/html';
         return new Response(await fs.readFile(new URL(pathname.slice(1),root)),{headers:{'Content-Type':type}});
@@ -185,6 +186,9 @@ try{
   await command('Page.bringToFront');
   await send('Browser.grantPermissions',{origin,permissions:['clipboardReadWrite','clipboardSanitizedWrite']});
   await send('Browser.setDownloadBehavior',{behavior:'allow',downloadPath:path.join(artifacts,'downloads')});
+  if(process.argv.includes('--localization-only')){
+    await checkHostLocalization({evaluate,command,navigate,waitFor,screenshot});
+  }else{
   console.log('Checking host flows');
   await navigate('/app.html');await waitFor('typeof restoreState === "undefined" && !!document.querySelector("#create-form")');
   await evaluate(`document.querySelector('#first-name').value='Olive Apartment';document.querySelector('#create-form').requestSubmit()`);
@@ -332,7 +336,7 @@ try{
     assert.ok(await evaluate("document.querySelector('#editor-drawer').contains(document.activeElement)"));
     await evaluate("document.querySelector('#save-editor').focus()");
     await key('Tab');
-    assert.equal(await evaluate('document.activeElement.id'),'close-drawer');
+    assert.equal(await evaluate('document.activeElement.id'),'editor-language');
     await key('Tab',true);
     assert.equal(await evaluate('document.activeElement.id'),'save-editor');
     if(i%2)await key('Escape');else await evaluate("document.querySelector('#cancel-editor').click()");
@@ -457,7 +461,9 @@ try{
   assert.ok(await evaluate(`localStorage.getItem('stayguide-demo-properties')==='[]'&&!document.querySelector('#empty-state').hidden`));
   console.log('PASS: create, switching/stale responses, owner editing, clipboard, QR download, keyboard skip/focus, responsive navigation, reduced motion and recovery.');
   console.log('PASS: marketing desktop/mobile screenshots identical with current vs committed shared CSS; JS-disabled guest rendered.');
+  await checkHostLocalization({evaluate,command,navigate,waitFor,screenshot});
   console.log('Screenshots: '+artifacts);
+  }
 }finally{
   try{await send('Browser.close');}catch{chrome.kill();}
   await new Promise(resolve=>server.close(resolve));

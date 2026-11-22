@@ -23,7 +23,7 @@ export async function checkQrPrint({origin,artifacts,command,evaluate,navigate,s
     await evaluate("document.querySelector('#download-book').focus()");
     await command('Input.dispatchKeyEvent',{type:'keyDown',key:'Tab',code:'Tab',windowsVirtualKeyCode:9});
     await command('Input.dispatchKeyEvent',{type:'keyUp',key:'Tab',code:'Tab',windowsVirtualKeyCode:9});
-    assert.equal(await evaluate('document.activeElement.id'),'close-qr');
+    assert.equal(await evaluate('document.activeElement.id'),'qr-language');
     assert.ok(await evaluate("document.documentElement.scrollWidth<=innerWidth && document.querySelector('#qr-workspace').scrollWidth<=document.querySelector('#qr-workspace').clientWidth"));
     await command('Input.dispatchKeyEvent',{type:'keyDown',key:'Escape',code:'Escape',windowsVirtualKeyCode:27});
     await command('Input.dispatchKeyEvent',{type:'keyUp',key:'Escape',code:'Escape',windowsVirtualKeyCode:27});

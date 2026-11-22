@@ -82,7 +82,7 @@
 }
 .host-nav a[aria-current="page"] { display: none; background: var(--host-nav-active); border-color: #504667; color: #fff; }
 .host-nav a:hover { background: #302e43; color: #fff; }
-.host-nav a > span { width: 1.25rem; text-align: center; }
+.host-nav a > span[aria-hidden="true"] { width: 1.25rem; text-align: center; }
 .host-workspace { min-width: 0; }
 .app-header {
   min-height: var(--host-header-height);
@@ -123,7 +123,7 @@
 .dashboard-body .button-primary:hover { background: var(--host-accent-hover); border-color: var(--host-accent-hover); }
 .dashboard-body .button-secondary { background: var(--host-surface); border-color: var(--host-border-strong); color: var(--host-ink); }
 .dashboard-body .button-secondary:hover { background: var(--host-surface-soft); border-color: var(--host-accent); }
-.dashboard-body :is(button, input, textarea, a):focus-visible { outline: 3px solid var(--host-focus); outline-offset: 3px; }
+.dashboard-body :is(button, input, textarea, select, a):focus-visible { outline: 3px solid var(--host-focus); outline-offset: 3px; }
 .host-sidebar a:focus-visible { outline-color: #d0bfff; }
 .dashboard-body button:disabled { cursor: default; opacity: .6; }
 .skip-link { position: fixed; top: var(--host-space-3); left: var(--host-space-3); z-index: 20; padding: var(--host-space-3) var(--host-space-4); border-radius: var(--host-radius-sm); background: var(--host-surface); color: var(--host-ink); transform: translateY(-200%); }
@@ -382,3 +382,21 @@
 .book-options input:focus-visible { outline: 3px solid var(--host-focus); outline-offset: 3px; }
 #book-status:empty { display: none; }
 @media (max-width: 649px) { .book-panel { padding: 20px; } #download-book { width: 100%; } }
+
+/* Host-only locale controls; no shared guest/print styles. */
+.dashboard-body .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+.host-language { display: inline-flex; margin: 0; min-width: 0; }
+.host-language select { width: 7.5rem; max-width: 100%; min-height: 44px; padding: 8px; border: 1px solid var(--host-border); border-radius: 8px; background: var(--host-paper, #fff); color: var(--host-ink); font: inherit; font-size: .8125rem; }
+.dialog-tools { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.drawer-top > div:first-child, .qr-workspace-head > div:first-child { min-width: 0; }
+@media (max-width: 649px) {
+  .app-header, .workspace-tools { flex-wrap: wrap; }
+  .workspace-tools { gap: 8px; justify-content: flex-end; }
+  .dialog-tools { gap: 4px; }
+  .dialog-tools .host-language select { width: 6.5rem; }
+  .drawer-top, .qr-workspace-head { flex-wrap: wrap; }
+}
+/* Expanded translations may wrap; retain the full action instead of clipping it. */
+.drawer-bottom .button, .discard-actions .button { white-space: normal; min-width: 0; text-align: center; }
+.discard-actions, .editor-card-footer { flex-wrap: wrap; }
+.editor-card-copy strong { overflow-wrap: anywhere; hyphens: auto; }
