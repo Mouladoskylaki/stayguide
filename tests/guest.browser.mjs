@@ -86,7 +86,8 @@ export async function checkGuest({origin,db,artifacts,command,evaluate,navigate,
   await command('Emulation.setEmulatedMedia',{features:[]});
   const cwd=fileURLToPath(new URL('..',import.meta.url));
   const committed=file=>execFileSync('git',['show','HEAD:'+file],{cwd});
-  const source=committed('src/worker.js').toString().replace("'./qr.js'",JSON.stringify(new URL('../src/qr.js',import.meta.url).href)).replace("'../public/qr-tools.js'",JSON.stringify(new URL('../public/qr-tools.js',import.meta.url).href));
+  const workerUrl=new URL('../src/worker.js',import.meta.url);
+  const source=committed('src/worker.js').toString().replace(/from\s+(['"])(\.{1,2}\/[^'"]+)\1/g,(_,quote,specifier)=>'from '+JSON.stringify(new URL(specifier,workerUrl).href));
   const baseline=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
   const before=await baseline.handleRequest(new Request(origin+full),{DB:db}),after=await fetch(origin+full);
   const beforeHtml=await before.text(),stylesheet=beforeHtml.match(/rel="stylesheet" href="\/([^"]+)"/)[1];

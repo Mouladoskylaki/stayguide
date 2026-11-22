@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {TRANSLATION_SQL} from '../src/translation-store.js';
 import {TRANSLATABLE_SECTIONS} from '../src/translation-service.js';
+import {UPDATE_GUIDE_SQL} from '../src/guide-store.js';
 const clone=value=>structuredClone(value);
 const sourceKey=(id,section)=>JSON.stringify([id,section]);
 const entryKey=a=>JSON.stringify([a.guide_id,a.section,a.source_language,a.target_language,a.source_version,a.model,a.prompt_version,a.provider_mode??'mock']);
@@ -73,7 +74,8 @@ export function createLocalDb(file=null){
    const row={id,edit_token_hash,content_json,created_at,updated_at};state.guides[id]=row;syncSources(row);return 1;
   }
   if(sql.startsWith('UPDATE ')){
-   const [content_json,updated_at,id]=p,row=state.guides[id];if(!row)throw Error('Unknown property');
+   const [content_json,updated_at,id]=p,row=state.guides[id];if(!row){if(sql===UPDATE_GUIDE_SQL)return 0;throw Error('Unknown property');}
+   if(sql===UPDATE_GUIDE_SQL&&(row.content_json!==p[3]||row.edit_token_hash!==p[4]))return 0;
    Object.assign(row,{content_json,updated_at});syncSources(row);return 1;
   }
   throw Error('Unsupported local query');

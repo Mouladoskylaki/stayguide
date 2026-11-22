@@ -4,8 +4,12 @@ import {handleRequest} from '../src/worker.js';
 import {qrMatrix,qrSvg} from '../src/qr.js';
 import {createLocalDb} from '../node/db.mjs';
 const env={DB:createLocalDb()};
-const request=(path,method='GET',body,token)=>new Request('https://stayguide.example'+path,{method,headers:{...(body?{'Content-Type':'application/json'}:{}),...(token?{'Authorization':'Bearer '+token}:{})},body:body?JSON.stringify(body):undefined});
-const call=(path,method='GET',body,token)=>handleRequest(request(path,method,body,token),env);
+const request=(path,method='GET',body,token,headers={})=>new Request('https://stayguide.example'+path,{method,headers:{...(body?{'Content-Type':'application/json'}:{}),...(token?{'Authorization':'Bearer '+token}:{}),...headers},body:body?JSON.stringify(body):undefined});
+const call=async(path,method='GET',body,token)=>{
+ const headers={};
+ if(method==='PATCH'&&token){const latest=await handleRequest(request(path,'GET',undefined,token),env);if(latest.ok)headers['If-Match']=latest.headers.get('ETag');}
+ return handleRequest(request(path,method,body,token,headers),env);
+};
 let id,token;
 test('create a guide without signing up',async()=>{
   const r=await call('/api/guides','POST',{property_name:'Little Olive House',wifi_name:'Olive-WiFi'});

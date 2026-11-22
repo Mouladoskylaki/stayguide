@@ -3,6 +3,7 @@ import {createTranslationService,TRANSLATABLE_SECTIONS,isTranslationLocale} from
 import {createOpenAITranslationProvider} from './openai-translation-provider.js';
 import {qrSvg} from './qr.js';
 import {previewWarning} from '../public/qr-tools.js';
+import {UPDATE_GUIDE_SQL,guideContent,guideRevision,versionGuide} from './guide-store.js';
 
 const KEYS = ['property_name','welcome','wifi_name','wifi_password','checkin','checkout','rules','appliances','parking','local_tips','emergency','contact','additional'];
 const LIMITS = { property_name:80, wifi_name:100, wifi_password:150, welcome:1500, checkin:800, checkout:800, rules:2000, appliances:2000, parking:1000, local_tips:2000, emergency:1000, contact:1000, additional:2000 };
@@ -11,7 +12,7 @@ const esc = v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':
 const paragraph = (v,language)=>{const text=esc(v).replace(/\r?\n/g,'<br>');return language?`<span lang="${esc(language)}">${text}</span>`:text;};
 const random = count=>{let b=new Uint8Array(count);crypto.getRandomValues(b);return [...b].map(x=>x.toString(16).padStart(2,'0')).join('');};
 async function hash(value){const a=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value));return [...new Uint8Array(a)].map(v=>v.toString(16).padStart(2,'0')).join('');}
-function json(data,status=200){return new Response(JSON.stringify(data),{status,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});}
+function json(data,status=200,headers={}){return new Response(JSON.stringify(data),{status,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff',...headers}});}
 function html(source,status=200){return new Response(source,{status,headers:{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','X-Robots-Tag':'noindex, nofollow','Content-Security-Policy':"default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",'Referrer-Policy':'no-referrer'}});}
 function error(msg,status){return json({error:msg},status);}
 function validatePatch(base,patch){
@@ -25,7 +26,8 @@ function validatePatch(base,patch){
   return result;
 }
 async function lookup(db,id){return db.prepare('SELECT id, edit_token_hash, content_json, created_at, updated_at FROM guides WHERE id = ?1').bind(id).first();}
-function parseRow(row){return JSON.parse(row.content_json);}
+const parseRow=guideContent;
+const guideConflict=()=>json({error:'This guide was updated elsewhere. Your changes have not been saved.',code:'guide_conflict'},409);
 function authorized(request,row){return request.headers.get('Authorization')?.startsWith('Bearer ');}
 async function checkOwner(request,row){const h=request.headers.get('Authorization')||'';return h.startsWith('Bearer ')&& (await hash(h.slice(7)))===row.edit_token_hash;}
 // Guest presentation only: all links and content are rendered before JavaScript runs.
@@ -97,8 +99,9 @@ export async function handleRequest(request,env){
       const payload=await request.json().catch(()=>null);let model;
       try{model=validatePatch(DEFAULTS,payload);}catch(e){return error(e.message,400);}
       const id=random(8),token=random(32),time=new Date().toISOString();
-      await env.DB.prepare('INSERT INTO guides (id, edit_token_hash, content_json, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5)').bind(id,await hash(token),JSON.stringify(model),time,time).run();
-      return json({id,token,guide_url:`/g/${id}`,qr_url:`/g/${id}/qr.svg`},201);
+      const stored=versionGuide(model);
+      await env.DB.prepare('INSERT INTO guides (id, edit_token_hash, content_json, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5)').bind(id,await hash(token),stored.contentJson,time,time).run();
+      return json({id,token,revision:stored.revision,guide_url:`/g/${id}`,qr_url:`/g/${id}/qr.svg`},201);
     }
     let m=path.match(/^\/api\/guides\/([a-f0-9]{16})\/translations$/);
     if(m&&(method==='POST'||method==='GET')){
@@ -116,11 +119,19 @@ export async function handleRequest(request,env){
     if(m&&(method==='GET'||method==='PATCH')){
       const row=await lookup(env.DB,m[1]);if(!row)return error('Not found',404);
       if(!(await checkOwner(request,row)))return error('Not authorized',401);
-      if(method==='GET')return json({id:row.id,guide:parseRow(row),updated_at:row.updated_at});
+      const revision=await guideRevision(row);
+      if(method==='GET')return json({id:row.id,guide:parseRow(row),revision,updated_at:row.updated_at},200,{ETag:'"'+revision+'"'});
+      const expected=request.headers.get('If-Match');
+      if(expected===null)return error('Reload this guide before saving: a content revision is required.',428);
+      const match=/^"([a-f0-9]{64})"$/.exec(expected);
+      if(!match)return error('Invalid guide revision.',400);
+      if(match[1]!==revision)return guideConflict();
       const patch=await request.json().catch(()=>null);let model;
       try{model=validatePatch(parseRow(row),patch);}catch(e){return error(e.message,400);}
-      const now=new Date().toISOString();await env.DB.prepare('UPDATE guides SET content_json = ?1, updated_at = ?2 WHERE id = ?3').bind(JSON.stringify(model),now,row.id).run();
-      return json({id:row.id,guide:model,updated_at:now});
+      const now=new Date().toISOString(),stored=versionGuide(model);
+      const saved=await env.DB.prepare(UPDATE_GUIDE_SQL).bind(stored.contentJson,now,row.id,row.content_json,row.edit_token_hash).run();
+      if(saved.meta?.changes!==1)return guideConflict();
+      return json({id:row.id,guide:model,revision:stored.revision,updated_at:now},200,{ETag:'"'+stored.revision+'"'});
     }
     m=path.match(/^\/g\/([a-f0-9]{16})(?:\/(qr\.svg|card))?$/);
     if(m&&method==='GET'){

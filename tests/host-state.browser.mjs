@@ -388,6 +388,31 @@ try{
   await waitFor("document.querySelector('#editor-drawer').hidden");
   assert.ok(await evaluate("document.activeElement.dataset.section==='welcome'"));
   await evaluate("window.fetch=window.editorFetch");
+  // A second authenticated editor saves while this actual browser retains an older revision.
+  await evaluate(`document.querySelectorAll('.editor-card')[0].click();document.querySelector('#edit-welcome').value='My unsaved conflict draft';
+    (async()=>{const id=document.querySelector('.property-tab.active').dataset.guideId;
+      const entry=JSON.parse(localStorage.getItem('stayguide-demo-properties')).find(p=>p.id===id),url='/api/guides/'+id;
+      const headers={Authorization:'Bearer '+entry.token,'Content-Type':'application/json'};
+      const original=await (await fetch(url,{headers})).json();
+      const updated=await fetch(url,{method:'PATCH',headers:{...headers,'If-Match':'"'+original.revision+'"'},body:JSON.stringify({welcome:'Another editor saved this welcome.'})});
+      if(updated.status!==200)throw Error('Synthetic concurrent save failed');
+      window.conflictPatchCount=0;window.fetch=(url,init)=>{if(init?.method==='PATCH')window.conflictPatchCount++;return window.editorFetch(url,init);};
+      document.querySelector('#section-form').requestSubmit();
+    })()`);
+  await waitFor("!document.querySelector('#editor-error').hidden && document.querySelector('#save-editor').disabled");
+  assert.ok(await evaluate("document.querySelector('#edit-welcome').value==='My unsaved conflict draft' && document.querySelector('#editor-error').textContent.includes('another tab or device') && document.activeElement.id==='editor-error' && !document.querySelector('#drawer-fields').disabled"));
+  await evaluate("document.querySelector('#section-form').dispatchEvent(new Event('submit',{cancelable:true}))");
+  assert.equal(await evaluate('window.conflictPatchCount'),1);
+  await screenshot('editor-conflict-390',390,844);
+  await evaluate("window.fetch=window.editorFetch;document.querySelector('#cancel-editor').click();document.querySelector('#discard-changes').click();document.querySelectorAll('.property-tab')[0].click()");
+  await waitFor("document.querySelector('#property-heading').textContent==='Olive Apartment'");
+  await evaluate("document.querySelectorAll('.property-tab')[1].click()");
+  await waitFor("document.querySelector('#property-heading').textContent==='Sea View Villa'");
+  await evaluate("document.querySelectorAll('.editor-card')[0].click()");
+  assert.equal(await evaluate("document.querySelector('#edit-welcome').value"),'Another editor saved this welcome.');
+  await evaluate("document.querySelector('#edit-welcome').value='Unsaved welcome';document.querySelector('#section-form').requestSubmit()");
+  await waitFor("document.querySelector('#editor-drawer').hidden");
+  console.log('PASS: stale editor receives 409, retains draft/focus, blocks repeated save and reloads latest revision only after explicit discard/navigation.');
   // Explicit dirty discard leaves saved content intact.
   await evaluate("document.querySelectorAll('.editor-card')[0].click();document.querySelector('#edit-welcome').value='Discard this';document.querySelector('#cancel-editor').click();document.querySelector('#discard-changes').click();document.querySelectorAll('.editor-card')[0].click()");
   assert.equal(await evaluate("document.querySelector('#edit-welcome').value"),'Unsaved welcome');

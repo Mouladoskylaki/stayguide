@@ -7,7 +7,7 @@ const helpers=fs.readFileSync(new URL('../public/qr-tools.js',import.meta.url),'
 const source=helpers+'\n'+fs.readFileSync(new URL('../public/guide-content.js',import.meta.url),'utf8').replaceAll('export ','')+'\n'+fs.readFileSync(new URL('../public/app.js',import.meta.url),'utf8').replace(/^import[^\n]+\n/gm,'');
 const STORAGE='stayguide-demo-properties',ACTIVE='stayguide-demo-active';
 const a={id:'a'.repeat(16),token:'a'.repeat(64)},b={id:'b'.repeat(16),token:'b'.repeat(64)};
-const response=(entry,name)=>({id:entry.id,guide:{property_name:name,wifi_name:name+' network'}});
+const response=(entry,name)=>({id:entry.id,revision:'1'.repeat(64),guide:{property_name:name,wifi_name:name+' network'}});
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
 
 // Run the actual host entrypoint, with only its browser boundary replaced.
@@ -25,7 +25,7 @@ function dashboard(initial={},options={}){
     removeAttribute(k){delete this.attributes[k];if(k==='href')delete this.href;}
     showModal(){this.open=true;}
     close(){this.open=false;}
-    focus(){}
+    focus(){this.focused=true;}
     click(){return this.listeners.click?.();}
   }
   const nodes=new Map();
@@ -40,7 +40,7 @@ function dashboard(initial={},options={}){
     localStorage,location:{origin:'http://localhost'},navigator:{clipboard:{writeText:options.writeClipboard||(async()=>{})}},
     confirm:()=>options.confirm!==false,alert:msg=>alerts.push(msg),prompt:msg=>prompts.push(msg),
     FormData:class {get(key){return options.form?.[key]??'';}},
-    fetch:(path,init)=>new Promise((resolve,reject)=>requests.push({path,init,fail:reject,reply:(body,ok=true)=>resolve({ok,json:async()=>body})}))
+    fetch:(path,init)=>new Promise((resolve,reject)=>requests.push({path,init,fail:reject,reply:(body,ok=true,status=ok?200:503)=>resolve({ok,status,json:async()=>body})}))
   });
   vm.runInContext(source,context);
   return {values,writes,requests,alerts,prompts,element,run:code=>vm.runInContext(code,context),options};
@@ -156,9 +156,33 @@ test('normal editing saves to the selected property with its owner token',async(
   const saving=d.element('#section-form').listeners.submit({preventDefault(){},target:{}});
   assert.equal(d.requests[2].path,'/api/guides/'+b.id);assert.equal(d.requests[2].init.method,'PATCH');
   assert.ok(d.requests[2].init.headers.Authorization==='Bearer '+b.token);
+  assert.equal(d.requests[2].init.headers['If-Match'],'"'+'1'.repeat(64)+'"');
   assert.equal(JSON.parse(d.requests[2].init.body).wifi_name,'Saved network');
   d.requests[2].reply(response(b,'Beta saved'));await saving;
   assert.equal(d.element('#property-heading').textContent,'Beta saved');assert.equal(d.element('#editor-drawer').hidden,true);
+});
+
+test('successful saves advance the retained revision for the next edit',async()=>{
+  const d=await loaded();d.element('#editor-grid').children[1].click();d.options.form={wifi_name:'First save'};
+  const saving=d.element('#section-form').listeners.submit({preventDefault(){}});
+  assert.equal(d.requests[1].init.headers['If-Match'],'"'+'1'.repeat(64)+'"');
+  d.requests[1].reply({...response(a,'First save'),revision:'3'.repeat(64)});await saving;
+  d.element('#editor-grid').children[1].click();d.options.form={wifi_name:'Second save'};
+  const second=d.element('#section-form').listeners.submit({preventDefault(){}});
+  assert.equal(d.requests[2].init.headers['If-Match'],'"'+'3'.repeat(64)+'"');d.requests[2].reply({...response(a,'Second save'),revision:'4'.repeat(64)});await second;
+});
+test('409 keeps the draft and stale revision, announces conflict and never retries or refreshes automatically',async()=>{
+  const d=await loaded();d.element('#editor-grid').children[1].click();d.options.form={wifi_name:'My unsaved text'};
+  const saving=d.element('#section-form').listeners.submit({preventDefault(){}});
+  d.requests[1].reply({error:'Changed elsewhere',revision:'9'.repeat(64)},false,409);await saving;
+  assert.equal(d.options.form.wifi_name,'My unsaved text');assert.equal(d.run('currentRevision'),'1'.repeat(64));
+  assert.equal(d.element('#editor-drawer').open,true);assert.equal(d.element('#save-editor').disabled,true);assert.equal(d.element('#drawer-fields').disabled,false);
+  assert.match(d.element('#editor-error').textContent,/another tab or device/);assert.match(d.element('#editor-error').textContent,/Copy your changes/);assert.equal(d.element('#editor-error').focused,true);
+  await d.element('#section-form').listeners.submit({preventDefault(){}});assert.equal(d.requests.length,2);
+});
+test('missing revision from a legacy server fails closed before editor rendering',async()=>{
+  const d=dashboard({[STORAGE]:JSON.stringify([a]),[ACTIVE]:a.id});d.requests[0].reply({id:a.id,guide:{property_name:'Legacy'}});await tick();
+  assert.equal(d.element('#editor-shell').hidden,true);assert.equal(d.run('currentRevision'),null);
 });
 
 test('a failed reset after backup retains recoverable original strings',()=>{
@@ -259,7 +283,7 @@ test('property initials handle whitespace, single names and Unicode without new 
 });
 test('ten cards report saved empty/started/complete states and explicit editing actions',async()=>{
   const d=dashboard({[STORAGE]:JSON.stringify([a]),[ACTIVE]:a.id});
-  d.requests[0].reply({id:a.id,guide:{property_name:'House',wifi_name:'Network',rules:'Saved rule'}});await tick();
+  d.requests[0].reply({id:a.id,revision:'1'.repeat(64),guide:{property_name:'House',wifi_name:'Network',rules:'Saved rule'}});await tick();
   const cards=d.element('#editor-grid').children;assert.equal(cards.length,10);
   assert.equal(cards[0].getAttribute('data-state'),'started');
   assert.equal(cards[1].getAttribute('data-state'),'started');
@@ -276,10 +300,10 @@ test('progress updates only after successful save and stays accurate after reloa
   const saving=d.element('#section-form').listeners.submit({preventDefault(){},target:{}});
   assert.equal(d.element('#progress-summary').textContent,'0 of 10 sections complete');
   const model={property_name:'Alpha',welcome:'Welcome',wifi_name:'Alpha network'};
-  d.requests[1].reply({id:a.id,guide:model});await saving;
+  d.requests[1].reply({id:a.id,revision:'1'.repeat(64),guide:model});await saving;
   assert.equal(d.element('#progress-summary').textContent,'1 of 10 sections complete');
   assert.equal(d.element('#section-progress').value,1);
-  const reload=dashboard(Object.fromEntries(d.values));reload.requests[0].reply({id:a.id,guide:model});await tick();
+  const reload=dashboard(Object.fromEntries(d.values));reload.requests[0].reply({id:a.id,revision:'1'.repeat(64),guide:model});await tick();
   assert.equal(reload.element('#progress-summary').textContent,'1 of 10 sections complete');
   assert.equal(reload.element('#progress-counts').textContent,'1 started · 8 empty');
 });
@@ -291,8 +315,8 @@ test('switching hides progress and disables all quick actions; stale results can
   for(const id of ['view-link','download-qr','print-card']){
     assert.equal(d.element('#'+id).href,undefined);assert.equal(d.element('#'+id).getAttribute('aria-disabled'),'true');
   }
-  d.requests[2].reply({id:b.id,guide:{property_name:'Beta',rules:'Saved rule'}});await tick();
-  d.requests[1].reply({id:a.id,guide:{property_name:'Alpha',welcome:'Saved',rules:'Saved',contact:'Saved'}});await tick();
+  d.requests[2].reply({id:b.id,revision:'2'.repeat(64),guide:{property_name:'Beta',rules:'Saved rule'}});await tick();
+  d.requests[1].reply({id:a.id,revision:'1'.repeat(64),guide:{property_name:'Alpha',welcome:'Saved',rules:'Saved',contact:'Saved'}});await tick();
   assert.equal(d.element('#progress-summary').textContent,'1 of 10 sections complete');
   assert.equal(d.element('#progress-counts').textContent,'1 started · 8 empty');
   assert.equal(d.element('#view-link').href,'http://localhost/g/'+b.id);
@@ -303,7 +327,7 @@ test('switching hides progress and disables all quick actions; stale results can
 });
 test('stale failure cannot hide the current progress; current failure removes its actions',async()=>{
   const d=await loaded(),tabs=d.element('#property-tabs').children;
-  tabs[0].click();tabs[1].click();d.requests[2].reply({id:b.id,guide:{property_name:'Beta',contact:'Saved'}});await tick();
+  tabs[0].click();tabs[1].click();d.requests[2].reply({id:b.id,revision:'2'.repeat(64),guide:{property_name:'Beta',contact:'Saved'}});await tick();
   d.requests[1].fail(Error('Stale load'));await tick();
   assert.equal(d.element('#guide-progress').hidden,false);assert.equal(d.element('#section-progress').value,1);
   d.element('#property-tabs').children[0].click();d.requests[3].fail(Error('Current failure'));await tick();
@@ -341,8 +365,8 @@ test('a stale save cannot apply its more-complete progress to the current proper
   const d=await loaded();d.element('#editor-grid').children[0].click();d.options.form={property_name:'Alpha',welcome:'Draft'};
   const saving=d.element('#section-form').listeners.submit({preventDefault(){},target:{}});
   d.element('#property-tabs').children[1].click();
-  d.requests[2].reply({id:b.id,guide:{property_name:'Beta',contact:'Saved contact'}});await tick();
-  d.requests[1].reply({id:a.id,guide:{property_name:'Alpha',welcome:'Saved welcome',rules:'Saved rules',contact:'Saved contact'}});await saving;
+  d.requests[2].reply({id:b.id,revision:'2'.repeat(64),guide:{property_name:'Beta',contact:'Saved contact'}});await tick();
+  d.requests[1].reply({id:a.id,revision:'1'.repeat(64),guide:{property_name:'Alpha',welcome:'Saved welcome',rules:'Saved rules',contact:'Saved contact'}});await saving;
   assert.equal(d.element('#progress-summary').textContent,'1 of 10 sections complete');
   assert.equal(d.element('#progress-counts').textContent,'1 started · 8 empty');
 });

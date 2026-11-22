@@ -40,6 +40,7 @@ updateProgressLayout();progressLayout?.addEventListener('change',updateProgressL
 const esc = v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let guides = [];
 let current = null;
+let currentRevision = null;
 let activeId;
 let editing = null;
 let storageProblem = false;
@@ -143,7 +144,7 @@ function clearGuidePresentation(){
 function setStatus(msg){ $('#save-status').textContent=msg; }
 async function api(path,options={}){
   const response=await fetch(path,{...options,headers:{'Content-Type':'application/json',...(options.headers||{})}});
-  const data=await response.json();if(!response.ok)throw new Error(data.error||'Something went wrong');return data;
+  const data=await response.json();if(!response.ok){const error=new Error(data.error||'Something went wrong');error.status=response.status;throw error;}return data;
 }
 async function createGuide(model){
   if(storageProblem)return;
@@ -153,7 +154,7 @@ async function createGuide(model){
 function getEntry(){return guides.find(g=>g.id===activeId);}
 async function loadActive(){
   const version=++loadVersion;
-  current=null;closeEditor();clearGuidePresentation();
+  current=null;currentRevision=null;closeEditor();clearGuidePresentation();
   $('#property-tabs').querySelectorAll('button').forEach(button=>{
     const selected=button.getAttribute('data-guide-id')===activeId;
     button.classList.toggle('active',selected);button.setAttribute('aria-pressed',String(selected));
@@ -167,8 +168,8 @@ async function loadActive(){
   try{
     const d=await api(`/api/guides/${entry.id}`,{headers:{Authorization:`Bearer ${entry.token}`}});
     if(!isCurrent())return;
-    if(d.id!==entry.id)throw new Error();
-    current=d.guide;render();if(!storageProblem)showEditor();
+    if(d.id!==entry.id||!isGuideRevision(d.revision))throw new Error();
+    current=d.guide;currentRevision=d.revision;render();if(!storageProblem)showEditor();
   }catch{
     if(!isCurrent())return;
     showEmpty();$('#empty-state h2').textContent='This guide is unavailable.';
@@ -227,6 +228,8 @@ function render(){
 let initialFields = {};
 let editorOpener = null;
 let editorSaving = false;
+let editorConflict = false;
+const isGuideRevision=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);
 function editorValues(){
   const form=new FormData($('#section-form'));
   return Object.fromEntries(editing.fields.map(([key])=>[key,String(form.get(key)||'')]));
@@ -234,7 +237,7 @@ function editorValues(){
 function setEditorSaving(saving){
   editorSaving=saving;
   $('#drawer-fields').disabled=saving;
-  for(const id of ['save-editor','cancel-editor','close-drawer'])$('#'+id).disabled=saving;
+  for(const id of ['save-editor','cancel-editor','close-drawer'])$('#'+id).disabled=saving||(id==='save-editor'&&editorConflict);
   $('#save-editor').textContent=saving?'Saving…':'Save changes';
   $('#section-form').setAttribute('aria-busy',String(saving));
   $('#editor-status').textContent=saving?'Saving your changes. Please wait.':'';
@@ -243,7 +246,7 @@ function setEditorSaving(saving){
 function openEditor(section,opener){
   if(!current||storageProblem||editing)return;
   editorVersion++;
-  editing=section;editorOpener=opener;
+  editing=section;editorOpener=opener;editorConflict=false;
   initialFields=Object.fromEntries(section.fields.map(([key,,type])=>[key,type==='textarea'?String(current[key]||'').replace(/\r\n?/g,'\n'):String(current[key]||'').replace(/[\r\n]/g,'')]));
   $('#drawer-title').textContent=section.title;
   $('#drawer-description').textContent=section.hint;
@@ -284,7 +287,7 @@ function sizeEditor(){
 globalThis.visualViewport?.addEventListener('resize',sizeEditor);
 globalThis.visualViewport?.addEventListener('scroll',sizeEditor);
 $('#section-form').addEventListener('submit',async e=>{
-  e.preventDefault();if(!editing||!current||storageProblem||editorSaving)return;
+  e.preventDefault();if(!editing||!current||storageProblem||editorSaving||editorConflict||!isGuideRevision(currentRevision))return;
   const patch=editorValues(),sectionId=editing.id;
   if('property_name' in patch&&!patch.property_name.trim()){
     $('#editor-error').textContent='Please enter a property name.';
@@ -294,15 +297,16 @@ $('#section-form').addEventListener('submit',async e=>{
   const isCurrent=()=>version===loadVersion&&entry.id===activeId&&drawer===editorVersion&&save===saveVersion&&!storageProblem;
   $('#editor-error').hidden=true;setEditorSaving(true);
   try{
-    const d=await api(`/api/guides/${entry.id}`,{method:'PATCH',headers:{Authorization:`Bearer ${entry.token}`},body:JSON.stringify(patch)});
+    const d=await api(`/api/guides/${entry.id}`,{method:'PATCH',headers:{Authorization:`Bearer ${entry.token}`,'If-Match':'"'+currentRevision+'"'},body:JSON.stringify(patch)});
     if(!isCurrent())return;
-    if(d.id!==entry.id)throw new Error();
-    current=d.guide;closeEditor();render();
+    if(d.id!==entry.id||!isGuideRevision(d.revision))throw new Error();
+    current=d.guide;currentRevision=d.revision;closeEditor();render();
     if(!storageProblem)$('#editor-grid').querySelector(`[data-section="${sectionId}"]`)?.focus({preventScroll:true});
-  }catch{
+  }catch(error){
     if(isCurrent()){
+      if(error.status===409)editorConflict=true;
       setEditorSaving(false);
-      $('#editor-error').textContent='Your changes couldn’t be saved. They are still here. Check your connection and choose Save changes to try again.';
+      $('#editor-error').textContent=editorConflict?'This guide was updated in another tab or device. Your text is still here and has not been saved. Copy your changes somewhere safe, then close this editor and reload the guide to review the latest version. We will not overwrite it.':'Your changes couldn’t be saved. They are still here. Check your connection and choose Save changes to try again.';
       $('#editor-error').hidden=false;$('#editor-error').focus();
     }
   }finally{if(save===saveVersion)setEditorSaving(false);}
