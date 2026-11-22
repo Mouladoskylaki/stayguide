@@ -60,7 +60,7 @@ test('legacy rows get read-only stable revisions and adopt nonce only on success
 test('a write between service read and update is rejected by SQL, not only a read/check',async()=>{
  const db=createLocalDb(),f=await setup(db),a=await f.read();let intercepted=false;
  const raced={prepare(sql){const statement=db.prepare(sql);if(sql!==UPDATE_GUIDE_SQL)return statement;
-  return {bind(...args){return {async run(){intercepted=true;const newer=versionGuide({...initial,welcome:'Intervening writer'});await db.prepare('UPDATE guides').bind(newer.contentJson,'same timestamp',f.created.id).run();return db.prepare(sql).bind(...args).run();}};}};
+  return {bind(...args){return {async all(){intercepted=true;const newer=versionGuide({...initial,welcome:'Intervening writer'});await db.prepare('UPDATE guides').bind(newer.contentJson,'same timestamp',f.created.id).run();return db.prepare(sql).bind(...args).all();}};}};
  }};
  f.env.DB=raced;assert.equal((await f.call('PATCH',{welcome:'Must not overwrite'},etag(a.revision))).status,409);assert(intercepted);f.env.DB=db;assert.equal((await f.read()).guide.welcome,'Intervening writer');
 });
@@ -79,9 +79,9 @@ test('accepted save invalidates changed section only; conflict preserves sources
 test('independent file-backed adapters atomically compare exact stored bytes and ownership',async t=>{
  fs.mkdirSync('.local/qa',{recursive:true});const directory=fs.mkdtempSync('.local/qa/sg-w1-');t.after(()=>fs.rmSync(directory,{recursive:true,force:true}));const file=directory+'/disposable.json';
  const f=await setup(createLocalDb(file)),snapshot=fs.readFileSync(file,'utf8'),row=Object.values(JSON.parse(snapshot).guides)[0],other=createLocalDb(file);
- assert.equal((await other.prepare(UPDATE_GUIDE_SQL).bind(row.content_json,'same',row.id,row.content_json,'wrong owner').run()).meta.changes,0);assert.equal(fs.readFileSync(file,'utf8'),snapshot);
+ assert.equal((await other.prepare(UPDATE_GUIDE_SQL).bind(row.content_json,'same',row.id,row.content_json,'wrong owner').all()).results.length,0);assert.equal(fs.readFileSync(file,'utf8'),snapshot);
  const values=['First','Second'].map(welcome=>versionGuide({...initial,welcome}).contentJson);
- const results=await Promise.all([f.db,other].map((db,i)=>db.prepare(UPDATE_GUIDE_SQL).bind(values[i],'identical time',row.id,row.content_json,row.edit_token_hash).run()));
- assert.deepEqual(results.map(r=>r.meta.changes).sort(),[0,1]);const state=JSON.parse(fs.readFileSync(file,'utf8'));assert.equal(state.guides[row.id].content_json,values[results.findIndex(r=>r.meta.changes===1)]);
- const held=fs.readFileSync(file,'utf8');assert.equal((await other.prepare(UPDATE_GUIDE_SQL).bind(values[1],'identical time',row.id,row.content_json,row.edit_token_hash).run()).meta.changes,0);assert.equal(fs.readFileSync(file,'utf8'),held);
+ const results=await Promise.all([f.db,other].map((db,i)=>db.prepare(UPDATE_GUIDE_SQL).bind(values[i],'identical time',row.id,row.content_json,row.edit_token_hash).all()));
+ assert.deepEqual(results.map(r=>r.results.length).sort(),[0,1]);const state=JSON.parse(fs.readFileSync(file,'utf8'));assert.equal(state.guides[row.id].content_json,values[results.findIndex(r=>r.results.length===1)]);
+ const held=fs.readFileSync(file,'utf8');assert.equal((await other.prepare(UPDATE_GUIDE_SQL).bind(values[1],'identical time',row.id,row.content_json,row.edit_token_hash).all()).results.length,0);assert.equal(fs.readFileSync(file,'utf8'),held);
 });

@@ -12,7 +12,7 @@ const id='0123456789abcdef',guide={property_name:'Synthetic property',welcome:'W
  const db=createLocalDb(),operations=[],expected=[];
  async function step(sql,args=[],read=false){
   operations.push({sql,args,read});const statement=db.prepare(sql).bind(...args);
-  const value=read?await statement.first():(await statement.run()).meta.changes;expected.push(value);return value;
+  const value=read?await statement.first():sql.includes(' RETURNING ')?(await statement.all()).results.length:(await statement.run()).meta.changes;expected.push(value);return value;
  }
  await step(insert,[id,'HASH',JSON.stringify(guide),'now','now']);
  await step(SQL.source,[id,'welcome'],true);await step(SQL.language,[id,'welcome','en-GB']);
@@ -57,6 +57,11 @@ x = json.loads(trace.stdout)
 x.update(initial=pathlib.Path('migrations/0000_guides.sql').read_text(), migration=pathlib.Path('migrations/0001_translation_foundation.sql').read_text(), schema=pathlib.Path('schema.sql').read_text(),openai_migration=pathlib.Path('migrations/0002_openai_translation.sql').read_text())
 
 import sqlite3,json,sys
+def write_count(connection,sql,args):
+ cursor=connection.execute(sql,args)
+ if ' RETURNING ' in sql:
+  rows=cursor.fetchall();assert all(row[0]==1 for row in rows);return len(rows)
+ return cursor.rowcount
 c=sqlite3.connect(':memory:');c.row_factory=sqlite3.Row;c.execute('PRAGMA foreign_keys=ON')
 c.executescript(x['initial'])
 c.execute('INSERT INTO guides VALUES(?,?,?,?,?)',('legacy','HASH','{"welcome":"Original Greek text"}','now','now'))
@@ -65,10 +70,10 @@ assert c.execute("SELECT source_language FROM translation_sources WHERE guide_id
 assert c.execute("SELECT content_json FROM guides WHERE id='legacy'").fetchone()[0]=='{"welcome":"Original Greek text"}'
 out=[]
 for op in x['operations']:
- cur=c.execute(op['sql'],{str(i+1): v for i,v in enumerate(op['args'])})
+ args={str(i+1): v for i,v in enumerate(op['args'])}
  if op['read']:
-  row=cur.fetchone();out.append(dict(row) if row else None)
- else:out.append(c.execute('SELECT changes()').fetchone()[0])
+  row=c.execute(op['sql'],args).fetchone();out.append(dict(row) if row else None)
+ else:out.append(write_count(c,op['sql'],args))
 # Fresh bootstrap must create the same schema and trigger behavior.
 fresh=sqlite3.connect(':memory:');fresh.executescript(x['schema'])
 assert fresh.execute('SELECT COUNT(*) FROM translation_sources').fetchone()[0]==0
@@ -84,20 +89,19 @@ import sqlite3,json,sys,tempfile,threading,os
 with tempfile.TemporaryDirectory(dir='.local/qa',prefix='sg-p31-phase3a-sql-') as d:
  p=os.path.join(d,'test.sqlite');c=sqlite3.connect(p);c.executescript(x['schema'])
  c.execute('INSERT INTO guides VALUES(?,?,?,?,?)',('g','HASH','{"welcome":"Hello"}','now','now'))
- c.execute(x['language'],dict(zip(['1','2','3'],('g','welcome','en-GB'))));c.commit();c.close()
+ write_count(c,x['language'],dict(zip(['1','2','3'],('g','welcome','en-GB'))));c.commit();c.close()
  barrier=threading.Barrier(2);results=[]
  def claim(i):
   db=sqlite3.connect(p,timeout=5);barrier.wait()
-  db.execute(x['claim'],{str(j+1):v for j,v in enumerate(('claim'+str(i),'g','welcome','en-GB','el-GR',2,'gpt-6-luna','hospitality-v1',100000,130000,660000,'mock'))})
-  results.append(db.execute('SELECT changes()').fetchone()[0]);db.commit();db.close()
+  changed=write_count(db,x['claim'],{str(j+1):v for j,v in enumerate(('claim'+str(i),'g','welcome','en-GB','el-GR',2,'gpt-6-luna','hospitality-v1',100000,130000,660000,'mock'))})
+  results.append(changed);db.commit();db.close()
  ts=[threading.Thread(target=claim,args=(i,)) for i in range(2)]
  for t in ts:t.start()
  for t in ts:t.join()
  assert sorted(results)==[0,1],results
  c=sqlite3.connect(p);assert c.execute('SELECT COUNT(*) FROM translation_attempts').fetchone()[0]==1
  c.execute('UPDATE translation_policy SET budget_nano=660000')
- c.execute(x['claim'],{str(j+1):v for j,v in enumerate(('over','g','welcome','en-GB','de-DE',2,'gpt-6-luna','hospitality-v1',100000,130000,660000,'mock'))})
- assert c.execute('SELECT changes()').fetchone()[0]==0
+ assert write_count(c,x['claim'],{str(j+1):v for j,v in enumerate(('over','g','welcome','en-GB','de-DE',2,'gpt-6-luna','hospitality-v1',100000,130000,660000,'mock'))})==0
  c.close()
 
 
@@ -107,17 +111,17 @@ print("PASS: independent SQLite connections, unique claims and cumulative budget
 with tempfile.TemporaryDirectory(dir='.local/qa',prefix='sg-p31-phase3a-correct-') as d:
  p=os.path.join(d,'test.sqlite');db=sqlite3.connect(p);db.executescript(x['schema'])
  db.execute('INSERT INTO guides VALUES(?,?,?,?,?)',('g','HASH','{"welcome":"Original"}','now','now'))
- db.execute(x['sql']['language'],{'1':'g','2':'welcome','3':'en-GB'})
+ write_count(db,x['sql']['language'],{'1':'g','2':'welcome','3':'en-GB'})
  claim=['edit-claim','g','welcome','en-GB','el-GR',2,'gpt-6-luna','hospitality-v1',100000,130000,660000,'mock']
- db.execute(x['sql']['claim'],{str(i+1):v for i,v in enumerate(claim)})
+ write_count(db,x['sql']['claim'],{str(i+1):v for i,v in enumerate(claim)})
  original=json.dumps({'welcome':'Original'})
- db.execute(x['sql']['publish'],{'1':'edit-claim','2':original,'3':'generated','4':100001});db.commit();db.close()
+ write_count(db,x['sql']['publish'],{'1':'edit-claim','2':original,'3':'generated','4':100001});db.commit();db.close()
  barrier=threading.Barrier(2);results=[]
  def correct(i):
   conn=sqlite3.connect(p,timeout=5);barrier.wait()
   args=['edit-claim',json.dumps({'welcome':'Correction '+str(i)}),2,'g','welcome','el-GR','gpt-6-luna','hospitality-v1','en-GB',original]
-  conn.execute(x['sql']['manual'],{str(j+1):v for j,v in enumerate(args)})
-  results.append(conn.execute('SELECT changes()').fetchone()[0]);conn.commit();conn.close()
+  changed=write_count(conn,x['sql']['manual'],{str(j+1):v for j,v in enumerate(args)})
+  results.append(changed);conn.commit();conn.close()
  ts=[threading.Thread(target=correct,args=(i,)) for i in range(2)]
  for t in ts:t.start()
  for t in ts:t.join()
@@ -129,7 +133,7 @@ print('PASS: SQLite concurrent corrections admit one writer per submitted snapsh
 legacy=sqlite3.connect(':memory:');legacy.row_factory=sqlite3.Row;legacy.execute('PRAGMA foreign_keys=ON')
 legacy.executescript(x['initial']);legacy.executescript(x['migration'])
 legacy.execute('INSERT INTO guides VALUES(?,?,?,?,?)',('preserved','HASH','{"welcome":"Original"}','now','now'))
-legacy.execute(x['sql']['language'],{'1':'preserved','2':'welcome','3':'en-GB'})
+write_count(legacy,x['sql']['language'],{'1':'preserved','2':'welcome','3':'en-GB'})
 legacy.execute("INSERT INTO translation_attempts(claim_id,guide_id,section,source_language,target_language,source_version,model,prompt_version,created_ms,lease_until,reservation_nano) VALUES(?,?,?,?,?,?,?,?,?,?,?)",('old-manual','preserved','welcome','en-GB','el-GR',2,'gpt-6-luna','hospitality-v1',100000,130000,660000))
 legacy.execute("UPDATE translations SET translated_text=?,status='ready',origin='manual'",('{"welcome":"Preserved manual"}',))
 before=[dict(r) for r in legacy.execute('SELECT * FROM translations')]

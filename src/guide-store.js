@@ -1,6 +1,6 @@
 // Content revision metadata stays inside the existing JSON column; no schema migration.
 export const GUIDE_REVISION_FIELD='__stayguide_revision';
-export const UPDATE_GUIDE_SQL='UPDATE guides SET content_json = ?1, updated_at = ?2 WHERE id = ?3 AND content_json = ?4 AND edit_token_hash = ?5';
+export const UPDATE_GUIDE_SQL='UPDATE guides SET content_json = ?1, updated_at = ?2 WHERE id = ?3 AND content_json = ?4 AND edit_token_hash = ?5 RETURNING 1 AS applied';
 export const validGuideRevision=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);
 export function guideContent(row){
  const {[GUIDE_REVISION_FIELD]:revision,...content}=JSON.parse(row.content_json);

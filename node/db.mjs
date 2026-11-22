@@ -81,16 +81,20 @@ export function createLocalDb(file=null){
   throw Error('Unsupported local query');
  }
  load();
- return {prepare(sql){let params=[];return {
-  bind(...values){params=values;return this;},
-  async first(){load();return execute(sql,params,true);},
-  async run(){
+ return {prepare(sql){let params=[];const returning=sql.endsWith(' RETURNING 1 AS applied');
+  async function write(){
    let lock;const snapshot=clone(state);
    try{
     if(file){fs.mkdirSync(path.dirname(file),{recursive:true});lock=fs.openSync(file+'.lock','wx',0o600);}
-    load();const changes=execute(sql,params);persist();return {success:true,meta:{changes}};
+    load();const changes=execute(sql,params);persist();
+    return {success:true,meta:{changes},results:returning&&changes===1?[{applied:1}]:[]};
    }catch(error){state=snapshot;throw error;}
    finally{if(lock!==undefined){fs.closeSync(lock);fs.unlinkSync(file+'.lock');}}
   }
+  return {
+  bind(...values){params=values;return this;},
+  async first(){if(returning)return (await write()).results[0]??null;load();return execute(sql,params,true);},
+  async all(){if(!returning)throw Error('Unsupported local result query');return write();},
+  run:write
  };}};
 }

@@ -4,6 +4,7 @@ import {createOpenAITranslationProvider} from './openai-translation-provider.js'
 import {qrSvg} from './qr.js';
 import {previewWarning} from '../public/qr-tools.js';
 import {UPDATE_GUIDE_SQL,guideContent,guideRevision,versionGuide} from './guide-store.js';
+import {directWriteSucceeded} from './db-write.js';
 
 const KEYS = ['property_name','welcome','wifi_name','wifi_password','checkin','checkout','rules','appliances','parking','local_tips','emergency','contact','additional'];
 const LIMITS = { property_name:80, wifi_name:100, wifi_password:150, welcome:1500, checkin:800, checkout:800, rules:2000, appliances:2000, parking:1000, local_tips:2000, emergency:1000, contact:1000, additional:2000 };
@@ -129,8 +130,8 @@ export async function handleRequest(request,env){
       const patch=await request.json().catch(()=>null);let model;
       try{model=validatePatch(parseRow(row),patch);}catch(e){return error(e.message,400);}
       const now=new Date().toISOString(),stored=versionGuide(model);
-      const saved=await env.DB.prepare(UPDATE_GUIDE_SQL).bind(stored.contentJson,now,row.id,row.content_json,row.edit_token_hash).run();
-      if(saved.meta?.changes!==1)return guideConflict();
+      const saved=await env.DB.prepare(UPDATE_GUIDE_SQL).bind(stored.contentJson,now,row.id,row.content_json,row.edit_token_hash).all();
+      if(!directWriteSucceeded(saved))return guideConflict();
       return json({id:row.id,guide:model,revision:stored.revision,updated_at:now},200,{ETag:'"'+stored.revision+'"'});
     }
     m=path.match(/^\/g\/([a-f0-9]{16})(?:\/(qr\.svg|card))?$/);

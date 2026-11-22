@@ -15,7 +15,7 @@ import {UPDATE_GUIDE_SQL as update,GUIDE_REVISION_FIELD as field,versionGuide} f
 import {TRANSLATION_SQL as translations} from './src/translation-store.js';
 const db=createLocalDb(),operations=[],expected=[];
 const content=welcome=>versionGuide({property_name:'Synthetic House',welcome,rules:'No smoking.'}).contentJson;
-async function step(sql,args,read=false){operations.push({sql,args,read});const s=db.prepare(sql).bind(...args);expected.push(read?await s.first():(await s.run()).meta.changes);}
+async function step(sql,args,read=false){operations.push({sql,args,read});const s=db.prepare(sql).bind(...args);expected.push(read?await s.first():sql.includes(' RETURNING ')?(await s.all()).results.length:(await s.run()).meta.changes);}
 const old=content('Original'),first=content('First');
 await step('INSERT INTO guides (id,edit_token_hash,content_json,created_at,updated_at) VALUES (?1,?2,?3,?4,?5)',['g','HASH',old,'same','same']);
 for(const section of ['welcome','rules']){
@@ -56,7 +56,10 @@ for op in x['operations']:
         row = cursor.fetchone()
         actual.append(dict(row) if row else None)
     else:
-        actual.append(cursor.rowcount)
+        if ' RETURNING ' in op['sql']:
+            returned=cursor.fetchall();assert all(row[0]==1 for row in returned);actual.append(len(returned))
+        else:
+            actual.append(cursor.rowcount)
 assert actual == x['expected'], (actual, x['expected'])
 assert db.execute('SELECT SUM(reservation_nano) FROM translation_attempts').fetchone()[0] == 1320000
 assert db.execute("SELECT origin,status FROM translations WHERE section='rules'").fetchone()[:] == ('manual', 'ready')
@@ -82,7 +85,7 @@ with tempfile.TemporaryDirectory(dir='.local/qa', prefix='sg-w1-sql-') as direct
             new[x['field']] = str(index+2)*64
             serialized = json.dumps(new)
             barrier.wait(timeout=5)
-            changed = connection.execute(x['update'], bindings([serialized, 'same', 'g', x['old'], 'HASH'])).rowcount
+            changed = len(connection.execute(x['update'], bindings([serialized, 'same', 'g', x['old'], 'HASH'])).fetchall())
             connection.commit()
             results.append((changed, serialized))
         except Exception as error:
@@ -101,7 +104,7 @@ with tempfile.TemporaryDirectory(dir='.local/qa', prefix='sg-w1-sql-') as direct
     db = sqlite3.connect(file)
     assert db.execute('SELECT content_json FROM guides WHERE id=?', ['g']).fetchone()[0] == winner
     before = list(db.iterdump())
-    assert db.execute(x['update'], bindings([x['old'], 'same', 'g', x['old'], 'HASH'])).rowcount == 0
+    assert db.execute(x['update'], bindings([x['old'], 'same', 'g', x['old'], 'HASH'])).fetchall() == []
     assert list(db.iterdump()) == before
     db.close()
 print('PASS: two independent SQLite editors admit one writer; rejected stale save changes no table or trigger state')
