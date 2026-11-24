@@ -3,6 +3,7 @@ import {directWriteSucceeded} from './db-write.js';
 export const TRANSLATION_SQL=Object.freeze({
  source:`SELECT * FROM translation_sources WHERE guide_id=?1 AND section=?2`,
  language:`UPDATE translation_sources SET source_language=?3,source_version=source_version+1 WHERE guide_id=?1 AND section=?2 AND source_language IS NOT ?3 RETURNING 1 AS applied`,
+ declare:`UPDATE translation_sources SET source_language=?3,source_version=source_version+CASE WHEN source_language IS ?3 THEN 0 ELSE 1 END WHERE guide_id=?1 AND section=?2 AND source_version=?4 AND (source_language IS ?3 OR source_version<9007199254740991) RETURNING 1 AS applied, section, source_language, source_version`,
  cached:`SELECT t.* FROM translations t JOIN translation_sources s ON s.guide_id=t.guide_id AND s.section=t.section AND s.source_language=t.source_language AND s.source_version=t.source_version WHERE t.guide_id=?1 AND t.section=?2 AND t.target_language=?3 AND t.model=?4 AND t.prompt_version=?5 AND t.provider_mode=?6 AND t.status='ready'`,
  claim:`INSERT INTO translation_attempts(claim_id,guide_id,section,source_language,target_language,source_version,model,prompt_version,created_ms,lease_until,reservation_nano,provider_mode)
  SELECT ?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12
@@ -23,6 +24,10 @@ export function createTranslationStore(db){
  return {
   source:(id,section)=>first('source',[id,section]),
   setLanguage:(id,section,language)=>write('language',[id,section,language]),
+  async declareLanguage(id,section,language,version){
+   const result=await db.prepare(TRANSLATION_SQL.declare).bind(id,section,language,version).all();
+   return directWriteSucceeded(result)?result.results[0]:null;
+  },
   cached:(id,section,target,model,prompt,mode='mock')=>first('cached',[id,section,target,model,prompt,mode]),
   claim:attempt=>write('claim',[attempt.claim_id,attempt.guide_id,attempt.section,attempt.source_language,attempt.target_language,attempt.source_version,attempt.model,attempt.prompt_version,attempt.created_ms,attempt.lease_until,attempt.reservation_nano,attempt.provider_mode??'mock']),
   publish:(claim,text,now)=>write('publish',[claim,text,'generated',now]),

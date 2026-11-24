@@ -46,6 +46,11 @@ export function createLocalDb(file=null){
    if(operation==='language'){
     if(!s||s.source_language===p[2])return 0;s.source_language=p[2];s.source_version++;invalidate(id,section);return 1;
    }
+   if(operation==='declare'){
+    if(!s||s.source_version!==p[3]||s.source_language!==p[2]&&s.source_version>=Number.MAX_SAFE_INTEGER)return 0;
+    if(s.source_language!==p[2]){s.source_language=p[2];s.source_version++;invalidate(id,section);}
+    return 1;
+   }
    if(operation==='claim'){
     const a=Object.fromEntries(['claim_id','guide_id','section','source_language','target_language','source_version','model','prompt_version','created_ms','lease_until','reservation_nano','provider_mode'].map((k,i)=>[k,p[i]]));
     if(!['mock','openai'].includes(a.provider_mode))throw Error('Invalid provider mode');
@@ -81,13 +86,14 @@ export function createLocalDb(file=null){
   throw Error('Unsupported local query');
  }
  load();
- return {prepare(sql){let params=[];const returning=sql.endsWith(' RETURNING 1 AS applied');
+ return {prepare(sql){let params=[];const declaring=sql===TRANSLATION_SQL.declare,returning=declaring||sql.endsWith(' RETURNING 1 AS applied');
   async function write(){
    let lock;const snapshot=clone(state);
    try{
     if(file){fs.mkdirSync(path.dirname(file),{recursive:true});lock=fs.openSync(file+'.lock','wx',0o600);}
     load();const changes=execute(sql,params);persist();
-    return {success:true,meta:{changes},results:returning&&changes===1?[{applied:1}]:[]};
+    const source=declaring&&changes===1?state.sources[sourceKey(params[0],params[1])]:null;
+    return {success:true,meta:{changes},results:returning&&changes===1?[source?{applied:1,section:source.section,source_language:source.source_language,source_version:source.source_version}:{applied:1}]:[]};
    }catch(error){state=snapshot;throw error;}
    finally{if(lock!==undefined){fs.closeSync(lock);fs.unlinkSync(file+'.lock');}}
   }

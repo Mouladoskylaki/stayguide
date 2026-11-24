@@ -104,7 +104,27 @@ export async function handleRequest(request,env){
       await env.DB.prepare('INSERT INTO guides (id, edit_token_hash, content_json, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5)').bind(id,await hash(token),stored.contentJson,time,time).run();
       return json({id,token,revision:stored.revision,guide_url:`/g/${id}`,qr_url:`/g/${id}/qr.svg`},201);
     }
-    let m=path.match(/^\/api\/guides\/([a-f0-9]{16})\/translations$/);
+    let m=path.match(/^\/api\/guides\/([a-f0-9]{16})\/translation-sources\/([^/]+)$/);
+    if(m&&(method==='GET'||method==='PATCH')){
+      const row=await lookup(env.DB,m[1]);if(!row)return error('Not found',404);
+      if(!(await checkOwner(request,row)))return error('Not authorized',401);
+      if(!Object.hasOwn(TRANSLATABLE_SECTIONS,m[2]))return error('Not found',404);
+      // Independent of provider construction/enablement and the legacy generation POST.
+      const service=createTranslationService({store:createTranslationStore(env.DB)});
+      let result;
+      if(method==='GET')result=await service.sourceMetadata(row.id,m[2]);
+      else{
+        const body=await translationBody(request);
+        if(request.headers.get('Content-Type')?.split(';')[0].trim().toLowerCase()!=='application/json'||!body||typeof body!=='object'||Array.isArray(body)||Object.keys(body).length!==2||!Object.hasOwn(body,'sourceLanguage')||!Object.hasOwn(body,'expectedSourceVersion'))return error('Invalid source declaration',400);
+        result=await service.declareSourceLanguage(row.id,m[2],body.sourceLanguage,body.expectedSourceVersion);
+      }
+      if(result.status==='ok')return json(result.metadata);
+      if(result.status==='not_found')return error('Not found',404);
+      if(result.status==='invalid')return error('Invalid source declaration',400);
+      if(result.status==='conflict')return json({error:'This section was updated. Reload its source metadata before declaring a language.',code:'source_version_conflict'},409);
+      return json({error:'Source metadata is unavailable.',code:'source_metadata_unavailable'},500);
+    }
+    m=path.match(/^\/api\/guides\/([a-f0-9]{16})\/translations$/);
     if(m&&(method==='POST'||method==='GET')){
       const row=await lookup(env.DB,m[1]);if(!row)return error('Not found',404);
       if(!(await checkOwner(request,row)))return error('Not authorized',401);

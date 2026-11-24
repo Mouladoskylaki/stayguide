@@ -3,6 +3,11 @@ export const TRANSLATION_CONFIG=Object.freeze({provider:'openai',model:'gpt-6-lu
 export const TRANSLATABLE_SECTIONS=Object.freeze(Object.fromEntries(Object.entries({welcome:['welcome'],arrival:['checkin','checkout'],rules:['rules'],appliances:['appliances'],parking:['parking'],local_tips:['local_tips'],emergency:['emergency'],contact:['contact'],additional:['additional']}).map(([k,v])=>[k,Object.freeze(v)])));
 const locales=Object.freeze(['en-GB','el-GR','de-DE','fr-FR','es-ES','it-IT','ja-JP','zh-CN','ar']);
 const validLocale=value=>locales.includes(value);
+const declarationLocales=Object.freeze(['el-GR','en-GB','de-DE','fr-FR','it-IT','es-ES']);
+const sourceMetadata=row=>{
+ if(!Number.isSafeInteger(row.source_version)||row.source_version<1||!(row.source_language===null||typeof row.source_language==='string'))throw Error('Invalid source metadata');
+ return {section:row.section,sourceLanguage:row.source_language,sourceVersion:row.source_version,declared:row.source_language!==null};
+};
 export {validLocale as isTranslationLocale};
 const bytes=value=>new TextEncoder().encode(value).length;
 const protectedValues=text=>[...new Set(text.match(/https?:\/\/[^\s]+|[\w.+-]+@[\w.-]+\.[A-Za-z]+|\b[A-Z][A-Z0-9_-]{1,}\b|\d+(?:[.:,/-]\d+)*/g)||[])];
@@ -36,6 +41,24 @@ export function createTranslationService({store,provider=createMockTranslationPr
  };
  return {
   config,
+  async sourceMetadata(id,section){
+   if(!Object.hasOwn(TRANSLATABLE_SECTIONS,section))return {status:'not_found'};
+   try{const row=await store.source(id,section);return row?{status:'ok',metadata:sourceMetadata(row)}:{status:'not_found'};}
+   catch{return {status:'unavailable'};}
+  },
+  async declareSourceLanguage(id,section,language,version){
+   if(!Object.hasOwn(TRANSLATABLE_SECTIONS,section))return {status:'not_found'};
+   if(!declarationLocales.includes(language)||!Number.isSafeInteger(version)||version<1)return {status:'invalid'};
+   try{
+    // RETURNING is the atomicity boundary, including identical-language no-ops.
+    const row=await store.declareLanguage(id,section,language,version);
+    if(row)return {status:'ok',metadata:sourceMetadata(row)};
+    const current=await store.source(id,section);
+    if(!current)return {status:'not_found'};
+    if(current.source_version===version)return {status:'unavailable'};
+    return {status:'conflict'};
+   }catch{return {status:'unavailable'};}
+  },
   // These methods are server-internal only. No unauthenticated HTTP access exists.
   async setSourceLanguage(id,section,language){
    if(!validLocale(language)||!TRANSLATABLE_SECTIONS[section])throw Error('Invalid language or section');
