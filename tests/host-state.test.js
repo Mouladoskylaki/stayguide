@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {createHostI18n,HOST_LANGUAGES} from '../public/host-i18n.js';
 import fs from 'node:fs';
+import {handleRequest} from '../src/worker.js';
+import {createLocalDb} from '../node/db.mjs';
 
 const helpers=fs.readFileSync(new URL('../public/qr-tools.js',import.meta.url),'utf8').replaceAll('export ','');
 const source=helpers+'\n'+fs.readFileSync(new URL('../public/guide-content.js',import.meta.url),'utf8').replaceAll('export ','')+'\n'+fs.readFileSync(new URL('../public/app.js',import.meta.url),'utf8').replace(/^import[^\n]+\n/gm,'');
@@ -13,7 +15,7 @@ const tick=()=>new Promise(resolve=>setImmediate(resolve));
 
 // Run the actual host entrypoint, with only its browser boundary replaced.
 function dashboard(initial={},options={}){
-  const values=new Map(Object.entries(initial)),writes=[],requests=[],alerts=[],prompts=[],confirmations=[];
+  const values=new Map(Object.entries(initial)),writes=[],requests=[],alerts=[],prompts=[],confirmations=[],capabilityRequests=[];
   class Element {
     constructor(){this.hidden=false;this.disabled=false;this.children=[];this.listeners={};this.attributes={};this.textContent='';this.value='';this.classList={add(){},remove(){},contains:name=>this.className?.split(' ').includes(name),toggle:(name,on)=>{const classes=new Set((this.className||'').split(' ').filter(Boolean));if(on)classes.add(name);else classes.delete(name);this.className=[...classes].join(' ');}};}
     addEventListener(type,fn){this.listeners[type]=fn;}
@@ -37,14 +39,22 @@ function dashboard(initial={},options={}){
     setItem(key,value){if(options.writeFailure||writes.length===options.failAfter)throw Error('private storage details');values.set(key,String(value));writes.push(key);}
   };
   const context=vm.createContext({
-    URL,createHostI18n,HOST_LANGUAGES,document:{documentElement:{lang:"en-GB"},querySelectorAll:()=>[...nodes.values()].filter(n=>Object.keys(n.attributes).some(a=>a.startsWith("data-i18n"))),querySelector:element,createElement:()=>new Element(),body:new Element(),addEventListener(){}},
+    URL,URLSearchParams,createHostI18n,HOST_LANGUAGES,document:{documentElement:{lang:"en-GB"},querySelectorAll:()=>[...nodes.values()].filter(n=>Object.keys(n.attributes).some(a=>a.startsWith("data-i18n"))),querySelector:element,createElement:()=>new Element(),body:new Element(),addEventListener(){}},
     localStorage,location:{origin:'http://localhost'},navigator:{clipboard:{writeText:options.writeClipboard||(async()=>{})}},
     confirm:msg=>{confirmations.push(msg);return options.confirm!==false;},alert:msg=>alerts.push(msg),prompt:msg=>prompts.push(msg),
     FormData:class {get(key){return element('#drawer-fields').disabled?'':options.form?.[key]??'';}},
-    fetch:(path,init)=>new Promise((resolve,reject)=>requests.push({path,init,fail:reject,reply:(body,ok=true,status=ok?200:503)=>resolve({ok,status,json:async()=>body})}))
+    fetch:(path,init)=>{
+      if(options.ownerApi){requests.push({path,init});return options.ownerApi(path,init);}
+      if(path.includes('/translation-capabilities?')){
+        capabilityRequests.push({path,init});if(options.capabilityError)return Promise.reject(Error('PRIVATE_CAPABILITY_ERROR'));
+        const version=Number(new URL(path,'http://localhost').searchParams.get('expectedSourceVersion'));
+        return Promise.resolve({ok:true,json:async()=>({generationAvailable:false,testOnly:false,state:'unavailable',sourceVersion:version,...options.capability})});
+      }
+      return new Promise((resolve,reject)=>requests.push({path,init,fail:reject,reply:(body,ok=true,status=ok?200:503)=>resolve({ok,status,json:async()=>body})}));
+    }
   });
   vm.runInContext(source,context);
-  return {values,writes,requests,alerts,prompts,confirmations,element,run:code=>vm.runInContext(code,context),options};
+  return {values,writes,requests,alerts,prompts,confirmations,capabilityRequests,element,run:code=>vm.runInContext(code,context),options};
 }
 
 for(const [name,raw] of [
@@ -603,4 +613,70 @@ test('C1 all nine section identities use their own owner metadata route; propert
   request.reply({...sourceMeta(),section});await read;assert.equal(d.element('#section-translations').hidden,false);assert.equal(d.element('#translation-source').value,'');
  }
  assert.equal(sections.length,9);assert(!sections.includes('wifi'));
+});
+
+async function generationEditor(){
+ const d=await loaded();d.run("current.welcome='Original. 112.'");d.options.form={property_name:'Alpha',welcome:'Original. 112.'};d.element('#editor-grid').children[0].click();d.element('#section-translations').open=true;
+ const meta=d.run('readSourceMetadata()');d.requests.at(-1).reply(sourceMeta('en-GB',2));await meta;
+ d.options.capability={generationAvailable:true,testOnly:true,state:'available'};await savedView(d,{status:'original',language:'en-GB',fields:{welcome:'Original. 112.'}});return d;
+}
+async function confirmSavedGeneration(d,post){
+ const result=savedTranslation('generated',{welcome:'Synthetic German. 112.'});post.reply(result);await tick();d.requests.at(-1).reply(result);await tick();d.requests.at(-1).reply(sourceMeta('en-GB',2));
+}
+test('C2 defaults unavailable and capability errors cannot cause a generation request',async()=>{
+ const d=await translationEditor(sourceMeta('en-GB',2));d.options.form={property_name:'Alpha',welcome:''};await savedView(d,{status:'original',language:'en-GB'});assert.equal(d.element('#generate-translation').hidden,true);const count=d.requests.length;await d.run('generateSectionTranslation()');assert.equal(d.requests.length,count);
+ d.options.capabilityError=true;await savedView(d,{status:'original',language:'en-GB'});assert.equal(d.element('#generate-translation').hidden,true);assert(d.element('#translation-generation-status').textContent.includes('could not be checked'));
+});
+test('C2 explicit action sends exactly the observed four fields once and verifies saved output',async()=>{
+ const d=await generationEditor();assert.equal(d.element('#generate-translation').hidden,false);assert.equal(d.element('#generate-translation').disabled,false);
+ const before=d.run('JSON.stringify({current,currentRevision})');const work=d.run('generateSectionTranslation()'),post=d.requests.at(-1);assert.equal(post.init.method,'POST');assert.deepEqual(JSON.parse(post.init.body),{section:'welcome',sourceLanguage:'en-GB',targetLanguage:'de-DE',expectedSourceVersion:2});assert(d.confirmations.at(-1).includes('saved text'));assert.equal(post.init.headers.Authorization,'Bearer '+a.token);
+ const count=d.requests.length;await d.run('generateSectionTranslation()');assert.equal(d.requests.length,count);await confirmSavedGeneration(d,post);await work;
+ assert.equal(d.element('#translation-generation-status').textContent,'Test translation saved and verified.');assert.equal(d.element('#translation-preview').hidden,false);assert.equal(d.element('#generate-translation').hidden,true);assert.equal(d.run('JSON.stringify({current,currentRevision})'),before);
+});
+test('C2 declined consent, missing source, empty/long input and drafts never dispatch',async()=>{
+ const d=await generationEditor();d.options.confirm=false;let count=d.requests.length;await d.run('generateSectionTranslation()');assert.equal(d.requests.length,count);d.options.confirm=true;
+ for(const code of ["current.welcome='';initialFields.welcome='';", "current.welcome='a'.repeat(1201);initialFields.welcome=current.welcome;", "sectionTranslations.metadata.sourceLanguage=null;sectionTranslations.metadata.declared=false;"]){
+  d.run(code);d.options.form.welcome=d.run('current.welcome');await d.run('generateSectionTranslation()');assert.equal(d.requests.length,count);
+ }
+ const e=await generationEditor();e.options.form.welcome='Unsaved';e.element('#drawer-fields').listeners.input();count=e.requests.length;await e.run('generateSectionTranslation()');assert.equal(e.requests.length,count);
+});
+for(const [category,message] of [['attempt_pending','already in progress'],['attempt_terminal','cannot be repeated'],['input_limit','too long'],['busy_or_limit','limit'],['translation_unavailable','failed'],['translation_timeout_uncertain','uncertain'],['source_version_changed','section changed']]){
+ test('C2 '+category+' is localized, sanitized and has no redispatch or Retry action',async()=>{
+  const d=await generationEditor(),work=d.run('generateSectionTranslation()');d.requests.at(-1).reply({error:'PRIVATE DETAIL',category},false,409);await work;assert(d.element('#translation-generation-status').textContent.includes(message));assert(!d.element('#translation-generation-status').textContent.includes(category));assert.equal(d.element('#generate-translation').hidden,true);
+  const count=d.requests.length;await d.run('generateSectionTranslation()');assert.equal(d.requests.length,count);
+ });
+}
+test('C2 network uncertainty consumes the local identity; refresh cannot redispatch it',async()=>{
+ const d=await generationEditor(),work=d.run('generateSectionTranslation()');d.requests.at(-1).fail(Error('PRIVATE_NETWORK'));await work;assert(d.element('#translation-generation-status').textContent.includes('could not be confirmed'));
+ const refresh=d.run('readSourceMetadata()');d.requests.at(-1).reply(sourceMeta('en-GB',2));await tick();assert.equal(d.element('#translation-target').value,'de-DE');d.requests.at(-1).reply({status:'original',language:'en-GB'});await tick();d.requests.at(-1).reply(sourceMeta('en-GB',2));await refresh;
+ assert.equal(d.element('#generate-translation').hidden,true);const count=d.requests.length;await d.run('generateSectionTranslation()');assert.equal(d.requests.length,count);
+});
+test('C2 stale generation responses cannot repaint another editor or overwrite a draft',async()=>{
+ for(const switcher of [d=>{d.options.form.welcome='New unsaved draft';d.element('#drawer-fields').listeners.input();},d=>d.run('closeEditor();openEditor(FIELDS[2])'),d=>d.run(`activeId=${JSON.stringify(b.id)};loadActive()`)]){
+  const d=await generationEditor(),work=d.run('generateSectionTranslation()'),post=d.requests.at(-1);switcher(d);post.reply(savedTranslation());await work;assert.equal(d.element('#translation-preview').hidden,true);assert.notEqual(d.element('#translation-generation-status').textContent,'Test translation saved and verified.');
+ }
+});
+test('C2 malformed success or failed saved verification cannot announce success',async()=>{
+ const d=await generationEditor(),work=d.run('generateSectionTranslation()');d.requests.at(-1).reply({...savedTranslation(),providerMode:'mock'});await work;assert.notEqual(d.element('#translation-generation-status').textContent,'Test translation saved and verified.');assert.equal(d.element('#generate-translation').hidden,true);
+ const e=await generationEditor(),other=e.run('generateSectionTranslation()');e.requests.at(-1).reply(savedTranslation());await tick();e.requests.at(-1).fail(Error('PRIVATE_READ'));await other;assert.notEqual(e.element('#translation-generation-status').textContent,'Test translation saved and verified.');
+});
+test('C2 safe refresh preserves a valid target, clears old output and reads current saved status only',async()=>{
+ const d=await generationEditor();await savedView(d,savedTranslation());const count=d.requests.length,work=d.run('readSourceMetadata()');assert.equal(d.element('#translation-target').value,'de-DE');assert.equal(d.element('#translation-preview').hidden,true);
+ d.requests.at(-1).reply(sourceMeta('en-GB',3));await tick();d.requests.at(-1).reply({status:'original',language:'en-GB'});await tick();d.requests.at(-1).reply(sourceMeta('en-GB',3));await work;assert.equal(d.element('#translation-target').value,'de-DE');assert.equal(d.element('#translation-preview').hidden,true);assert(d.requests.slice(count).every(r=>!r.init.method||r.init.method==='GET'));
+});
+test('C2 capability pending/terminal states remain unavailable after an editor reload',async()=>{
+ for(const state of ['attempt_pending','attempt_terminal']){
+  const d=await generationEditor();d.options.capability={generationAvailable:false,testOnly:true,state};await savedView(d,{status:'original',language:'en-GB'});assert.equal(d.element('#generate-translation').hidden,true);assert(d.element('#translation-generation-status').textContent.length>0);const n=d.requests.length;await d.run('generateSectionTranslation()');assert.equal(d.requests.length,n);
+ }
+});
+test('C2 actual host UI -> authenticated Worker -> fake provider -> storage -> saved read',async()=>{
+ let calls=0,keys=0;const db=createLocalDb(),env={DB:db,TRANSLATION_OFFLINE_TEST:true,TRANSLATION_PROVIDER:{mode:'openai',enabled:true,async translate(p){calls++;return {fields:{welcome:'Synthetic German. 112.'},usage:{inputTokens:100,outputTokens:40,reasoningTokens:0,estimatedNano:30000,conservativeNano:33000}};}},get OPENAI_API_KEY(){keys++;throw Error('Credential forbidden');}};
+ const ownerApi=(path,init={})=>handleRequest(new Request('https://offline.invalid'+path,init),env);
+ const owner=await (await ownerApi('/api/guides',{method:'POST',body:JSON.stringify({property_name:'Synthetic UI owner',welcome:'Original. 112.'}),headers:{'Content-Type':'application/json'}})).json();
+ assert.equal((await ownerApi('/api/guides/'+owner.id+'/translation-sources/welcome',{method:'PATCH',headers:{Authorization:'Bearer '+owner.token,'Content-Type':'application/json'},body:JSON.stringify({sourceLanguage:'en-GB',expectedSourceVersion:1})})).status,200);
+ const d=dashboard({[STORAGE]:JSON.stringify([owner]),[ACTIVE]:owner.id},{ownerApi,form:{property_name:'Synthetic UI owner',welcome:'Original. 112.'}});
+ for(let i=0;i<100&&!d.run('!!current');i++)await tick();assert(d.run('!!current'));d.element('#editor-grid').children[0].click();d.element('#section-translations').open=true;await d.run('readSourceMetadata()');d.element('#translation-target').value='de-DE';await d.run('readSavedTranslation()');assert.equal(calls,0);
+ await Promise.all([d.run('generateSectionTranslation()'),d.run('generateSectionTranslation()')]);assert.equal(calls,1);assert.equal(keys,0);assert.equal(d.element('#translation-generation-status').textContent,'Test translation saved and verified.');assert.equal(d.element('#translation-preview').children[1].textContent,'Synthetic German. 112.');
+ await d.run('readSourceMetadata()');assert.equal(d.element('#translation-target').value,'de-DE');assert.equal(calls,1);await d.run('generateSectionTranslation()');assert.equal(calls,1);
+ assert.equal(d.requests.filter(r=>r.init?.method==='POST'&&r.path.endsWith('/translations')).length,1);
 });

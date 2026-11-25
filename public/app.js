@@ -151,7 +151,7 @@ function clearGuidePresentation(){
 function setStatus(msg){ ui('#save-status',msg); }
 async function api(path,options={}){
   const response=await fetch(path,{...options,headers:{'Content-Type':'application/json',...(options.headers||{})}});
-  const data=await response.json();if(!response.ok){const error=new Error(data.error||'Something went wrong');error.status=response.status;throw error;}return data;
+  const data=await response.json();if(!response.ok){const error=new Error(data.error||'Something went wrong');error.status=response.status;error.category=typeof data.category==='string'?data.category:null;throw error;}return data;
 }
 async function createGuide(model){
   if(storageProblem)return;
@@ -237,12 +237,14 @@ let editorOpener = null;
 let editorSaving = false;
 let editorConflict = false;
 let sectionTranslations=null;
+const generationAttempts=new Map();
+const generationIdentity=(s,target)=>JSON.stringify([s.id,s.section,s.metadata?.sourceLanguage,target,s.metadata?.sourceVersion]);
 const translationSections=['welcome','arrival','rules','appliances','parking','local_tips','emergency','contact','additional'];
 // Source writes start only from a clean draft and temporarily disable the fields.
 // FormData omits disabled controls; that must not masquerade as changed text.
 const editorDirty=()=>!!editing&&sectionTranslations?.busy!=='source'&&editing.fields.some(([key])=>editorValues()[key]!==initialFields[key]);
 function translationContext(state){return state===sectionTranslations&&editing?.id===state.section&&editorVersion===state.editor&&loadVersion===state.load&&activeId===state.id&&!storageProblem;}
-function translationPreviewClear(){const node=$('#translation-preview');node.replaceChildren();node.hidden=true;node.removeAttribute('lang');}
+function translationPreviewClear(){if(sectionTranslations){sectionTranslations.hasSaved=false;sectionTranslations.capability=null;}const node=$('#translation-preview');node.replaceChildren();node.hidden=true;node.removeAttribute('lang');}
 function translationOptions(select,empty){
   select.replaceChildren();const placeholder=document.createElement('option');placeholder.value='';hostI18n.text(placeholder,empty);select.append(placeholder);
   for(const [locale,name] of Object.entries(HOST_LANGUAGES)){const option=document.createElement('option');option.value=locale;option.lang=locale;option.textContent=name;select.append(option);}
@@ -252,7 +254,7 @@ function resetSectionTranslations(){
   translationPreviewClear();ui('#translation-source-state','');ui('#translation-status','');
   translationOptions($('#translation-source'),'Choose the source language');translationOptions($('#translation-target'),'Choose a target language');
   if(editing&&translationSections.includes(editing.id)){
-    const entry=getEntry();sectionTranslations={id:entry.id,token:entry.token,section:editing.id,editor:editorVersion,load:loadVersion,serial:0,metadata:null,busy:'',locked:false,status:'Choose a target language to view saved text.',dirty:false};
+    const entry=getEntry();sectionTranslations={id:entry.id,token:entry.token,section:editing.id,editor:editorVersion,load:loadVersion,serial:0,metadata:null,busy:'',locked:false,status:'Choose a target language to view saved text.',dirty:false,capability:null,hasSaved:false,generationStatus:''};
   }
   updateTranslationControls();
 }
@@ -266,11 +268,12 @@ function updateTranslationControls(){
   const proposed=$('#translation-source').value;
   $('#translation-source').disabled=blocked;
   $('#save-source-language').disabled=blocked||!Object.hasOwn(HOST_LANGUAGES,proposed)||proposed===s.metadata?.sourceLanguage;
-  $('#translation-target').disabled=dirty||editorSaving||editorConflict||s.locked||!s.metadata?.declared||s.busy==='metadata'||s.busy==='source'||proposed!==s.metadata?.sourceLanguage;
+  $('#translation-target').disabled=dirty||editorSaving||editorConflict||s.locked||!s.metadata?.declared||s.busy==='metadata'||s.busy==='source'||s.busy==='generation'||proposed!==s.metadata?.sourceLanguage;
   $('#refresh-translations').disabled=dirty||editorSaving||editorConflict||!!s.busy;
   $('#drawer-fields').disabled=editorSaving||s.busy==='source';
   $('#save-editor').disabled=editorSaving||editorConflict||s.busy==='source';
   ui('#translation-status',dirty||editorSaving?'Save or discard your text changes before using translation settings.':s.status);
+  updateGenerationControls(s);
 }
 function validSourceMetadata(value,section){return value?.section===section&&Number.isSafeInteger(value.sourceVersion)&&value.sourceVersion>0&&typeof value.declared==='boolean'&&(value.sourceLanguage===null&&!value.declared||typeof value.sourceLanguage==='string'&&/^[a-zA-Z]{2,3}(?:-[a-zA-Z0-9]{2,8})*$/.test(value.sourceLanguage)&&value.declared);}
 function showSourceMetadata(s){
@@ -283,8 +286,9 @@ function showSourceMetadata(s){
   ui('#translation-source-state',language?'Saved source language: {language}':'Source language not declared.',{language:HOST_LANGUAGES[language]||language});
 }
 async function readSourceMetadata(){
-  const s=sectionTranslations;if(!s||!translationContext(s)||!$('#section-translations').open||editorDirty()||editorSaving||editorConflict||s.busy==='source')return;
-  const serial=++s.serial;s.busy='metadata';s.locked=true;s.metadata=null;s.status='Loading saved translation status…';translationPreviewClear();$('#translation-target').value='';updateTranslationControls();
+  const s=sectionTranslations;if(!s||!translationContext(s)||!$('#section-translations').open||editorDirty()||editorSaving||editorConflict||s.busy==='source'||s.busy==='generation')return;
+  const keptTarget=$('#translation-target').value;
+  const serial=++s.serial;s.generationStatus='';s.busy='metadata';s.locked=true;s.metadata=null;s.status='Loading saved translation status…';translationPreviewClear();$('#translation-target').value=Object.hasOwn(HOST_LANGUAGES,keptTarget)?keptTarget:'';updateTranslationControls();
   try{
     const value=await api(`/api/guides/${s.id}/translation-sources/${s.section}`,{headers:{Authorization:`Bearer ${s.token}`},cache:'no-store'});
     if(!translationContext(s)||serial!==s.serial||!$('#section-translations').open)return;
@@ -292,6 +296,7 @@ async function readSourceMetadata(){
     s.metadata={...value};s.locked=false;showSourceMetadata(s);s.status=value.declared?'Choose a target language to view saved text.':'Source language not declared.';
   }catch{if(translationContext(s)&&serial===s.serial){s.status='Saved status could not be loaded. Check your connection, then refresh.';s.locked=true;}}
   finally{if(translationContext(s)&&serial===s.serial){s.busy='';updateTranslationControls();}}
+  if(translationContext(s)&&serial===s.serial&&!s.locked&&s.metadata?.declared&&Object.hasOwn(HOST_LANGUAGES,keptTarget)&&!editorDirty())await readSavedTranslation();
 }
 async function saveSourceLanguage(){
   const s=sectionTranslations,language=$('#translation-source').value;
@@ -309,7 +314,7 @@ async function saveSourceLanguage(){
 async function readSavedTranslation(){
   const s=sectionTranslations,target=$('#translation-target').value;
   if(!s||!translationContext(s)||!$('#section-translations').open||editorDirty()||editorSaving||editorConflict||s.locked||!s.metadata?.declared||s.busy==='source'||s.busy==='metadata'||!Object.hasOwn(HOST_LANGUAGES,target)||$('#translation-source').value!==s.metadata.sourceLanguage)return;
-  const expected={...s.metadata},serial=++s.serial;s.busy='view';s.status='Loading saved translation status…';translationPreviewClear();updateTranslationControls();
+  const expected={...s.metadata},serial=++s.serial;s.generationStatus='';s.busy='view';s.status='Loading saved translation status…';translationPreviewClear();updateTranslationControls();
   try{
     const result=await api(`/api/guides/${s.id}/translations?section=${encodeURIComponent(s.section)}&lang=${encodeURIComponent(target)}`,{headers:{Authorization:`Bearer ${s.token}`},cache:'no-store'});
     if(!translationContext(s)||serial!==s.serial)return;
@@ -322,19 +327,86 @@ async function readSavedTranslation(){
       if(result.language!==target||result.correction?.sourceVersion!==expected.sourceVersion||!['manual','generated'].includes(result.origin)||!result.fields||Object.keys(result.fields).sort().join()!==keys.sort().join()||!keys.every(key=>typeof result.fields[key]==='string'))throw Error();
       const preview=$('#translation-preview');
       for(const [key,label] of editing.fields){if(key==='property_name')continue;const dt=document.createElement('dt'),dd=document.createElement('dd');hostI18n.text(dt,label);dd.setAttribute('lang',target);dd.textContent=result.fields[key];preview.append(dt);preview.append(dd);}
-      preview.hidden=false;s.status=result.origin==='manual'?'Manually corrected translation available.':'Current saved translation available.';
+      preview.hidden=false;s.hasSaved=true;s.status=result.origin==='manual'?'Manually corrected translation available.':'Current saved translation available.';
     }else if(result.status==='translated'&&result.providerMode==='mock')s.status='Test output is not a saved AI translation.';
     else if(result.status==='original'&&result.language===expected.sourceLanguage)s.status=target===expected.sourceLanguage?'This is the original language.':'No current saved translation available.';
     else throw Error();
+    await readGenerationCapability(s,serial,target,expected);
+    if(translationContext(s)&&serial===s.serial)return result;
   }catch{if(translationContext(s)&&serial===s.serial){translationPreviewClear();s.status='Saved status could not be loaded. Check your connection, then refresh.';}}
   finally{if(translationContext(s)&&serial===s.serial){s.busy='';updateTranslationControls();}}
 }
+
+const generationMessages={
+ unavailable:'AI translation generation is not available yet. Saved translations can still be viewed.',
+ source_required:'Choose and save the source language first.',
+ source_changed:'This section changed. Refresh saved status before choosing again.',
+ same_language:'Choose a target language different from the source.',
+ empty:'Save some text in this section before translating.',
+ input_limit:'This section is too long to translate. The limit is 1,200 characters; nothing was shortened.',
+ cached:'A saved translation is already available.',
+ attempt_pending:'A translation attempt is already in progress. Refresh saved status later.',
+ attempt_terminal:'A previous attempt cannot be repeated. You can still view saved translations.',
+ busy_or_limit:'Translation is blocked by a usage or rate limit. No retry is available.',
+ translation_unavailable:'Translation failed. This attempt cannot be repeated; saved translations remain available.',
+ translation_timeout_uncertain:'The translation outcome is uncertain. Do not repeat this attempt; refresh saved status later.',
+ network:'The translation outcome could not be confirmed. Do not repeat this attempt; refresh saved status later.'
+};
+function sourceTextForTranslation(){return editing?editing.fields.filter(([key])=>key!=='property_name').map(([key])=>String(current?.[key]||'')).join('\n'):'';}
+function updateGenerationControls(s){
+  const c=s.capability,target=$('#translation-target').value,attempt=generationAttempts.get(generationIdentity(s,target));
+  const available=c?.generationAvailable===true&&c.testOnly===true;
+  const button=$('#generate-translation');button.hidden=!available||!!attempt||s.hasSaved;
+  button.disabled=!available||!!attempt||s.hasSaved||!!s.busy||editorDirty()||editorSaving||editorConflict||s.locked||!s.metadata?.declared||!Object.hasOwn(HOST_LANGUAGES,target)||target===s.metadata.sourceLanguage||!sourceTextForTranslation().trim()||[...sourceTextForTranslation()].length>1200;
+  ui('#translation-generation-note',c?.testOnly?'Offline test mode: new translations are synthetic. Only saved section text is sent to the test provider.':'AI translation generation is not available yet. Saved translations can still be viewed.');
+  let message=s.generationStatus||attempt?.message||'';
+  if(editorDirty()||editorSaving)message='Save or discard your text changes before using translation settings.';
+  else if(!s.generationStatus&&c?.testOnly&&c.state!=='available')message=generationMessages[c.state]||generationMessages.unavailable;
+  ui('#translation-generation-status',message);
+}
+async function readGenerationCapability(s,serial,target,expected){
+  s.capability=null;
+  try{
+    const query=new URLSearchParams({section:s.section,sourceLanguage:expected.sourceLanguage,targetLanguage:target,expectedSourceVersion:String(expected.sourceVersion)});
+    const cap=await api(`/api/guides/${s.id}/translation-capabilities?${query}`,{headers:{Authorization:`Bearer ${s.token}`},cache:'no-store'});
+    if(!translationContext(s)||serial!==s.serial)return;
+    if(typeof cap?.generationAvailable!=='boolean'||typeof cap.testOnly!=='boolean'||cap.sourceVersion!==expected.sourceVersion||!Object.hasOwn(generationMessages,cap.state)&&cap.state!=='available'||cap.generationAvailable&&(cap.testOnly!==true||cap.state!=='available'))throw Error();
+    s.capability=cap;
+  }catch{if(translationContext(s)&&serial===s.serial){s.capability=null;s.generationStatus='Generation availability could not be checked. Translation remains disabled.';}}
+}
+async function generateSectionTranslation(){
+  const s=sectionTranslations,target=$('#translation-target').value;
+  if(!s||!translationContext(s)||!$('#section-translations').open||editorDirty()||editorSaving||editorConflict||s.busy||s.locked||!s.metadata?.declared||s.capability?.generationAvailable!==true||s.capability.testOnly!==true||s.capability.sourceVersion!==s.metadata.sourceVersion||s.hasSaved||!Object.hasOwn(HOST_LANGUAGES,target)||target===s.metadata.sourceLanguage||$('#translation-source').value!==s.metadata.sourceLanguage||generationAttempts.has(generationIdentity(s,target)))return;
+  if(!sourceTextForTranslation().trim()){s.generationStatus=generationMessages.empty;updateTranslationControls();return;}
+  if([...sourceTextForTranslation()].length>1200){s.generationStatus=generationMessages.input_limit;updateTranslationControls();return;}
+  if(!confirm(t('Send the saved text in this section to the translation provider? Your original text will not change.')))return;
+  const expected={...s.metadata},identity=generationIdentity(s,target),serial=++s.serial;
+  let verificationSerial=null;
+  const record={message:'Translation is in progress…'};generationAttempts.set(identity,record);s.busy='generation';s.generationStatus=record.message;updateTranslationControls();$('#translation-generation-status').focus({preventScroll:true});
+  try{
+    const result=await api(`/api/guides/${s.id}/translations`,{method:'POST',headers:{Authorization:`Bearer ${s.token}`},body:JSON.stringify({section:s.section,sourceLanguage:expected.sourceLanguage,targetLanguage:target,expectedSourceVersion:expected.sourceVersion})});
+    if(!translationContext(s)||serial!==s.serial)return;
+    const keys=editing.fields.filter(([key])=>key!=='property_name').map(([key])=>key);
+    if(result.status!=='translated'||result.providerMode!=='openai'||result.language!==target||result.correction?.sourceVersion!==expected.sourceVersion||!['generated','manual'].includes(result.origin)||!result.fields||Object.keys(result.fields).sort().join()!==keys.sort().join()||!keys.every(key=>typeof result.fields[key]==='string'))throw Error();
+    s.busy='';const verification=readSavedTranslation();verificationSerial=s.serial;const saved=await verification;
+    if(!translationContext(s)||s.serial!==verificationSerial)return;
+    if(saved?.status!=='translated'||saved.providerMode!=='openai'||saved.correction?.sourceVersion!==expected.sourceVersion||!s.hasSaved)throw Error();
+    if(saved.origin!=='manual'&&!keys.every(key=>saved.fields[key]===result.fields[key]))throw Error();
+    record.message=saved.origin==='manual'?'Saved translation verified.':'Test translation saved and verified.';s.generationStatus=record.message;
+  }catch(error){
+    const category=({source_language_required:'source_required',source_language_changed:'source_changed',source_version_changed:'source_changed',stale_or_expired:'source_changed',live_disabled:'unavailable'})[error?.category]||error?.category;
+    record.message=generationMessages[category]||generationMessages.network;
+    if(translationContext(s)&&(s.serial===serial||verificationSerial!==null&&s.serial===verificationSerial)){s.generationStatus=record.message;if(['source_version_changed','source_language_changed','source_changed','stale_or_expired'].includes(error?.category))s.locked=true;}
+  }finally{if(translationContext(s)&&(s.serial===serial||verificationSerial!==null&&s.serial===verificationSerial)){s.busy='';updateTranslationControls();}}
+}
+$('#generate-translation').addEventListener('click',generateSectionTranslation);
+
 $('#section-translations').addEventListener('toggle',()=>{
   if($('#section-translations').open)readSourceMetadata();
   else if(sectionTranslations&&sectionTranslations.busy!=='source'){sectionTranslations.serial++;sectionTranslations.busy='';translationPreviewClear();}
 });
-$('#translation-source').addEventListener('change',()=>{const s=sectionTranslations;if(s&&!s.busy&&!s.locked&&!editorDirty()&&!editorSaving&&!editorConflict){s.serial++;s.status=$('#translation-source').value===s.metadata?.sourceLanguage?'Choose a target language to view saved text.':'Save the selected source language before viewing translations.';$('#translation-target').value='';translationPreviewClear();updateTranslationControls();}});
-$('#translation-target').addEventListener('change',()=>{if(sectionTranslations?.busy==='source')return;if(!$('#translation-target').value&&sectionTranslations){sectionTranslations.serial++;sectionTranslations.busy='';translationPreviewClear();sectionTranslations.status='Choose a target language to view saved text.';updateTranslationControls();}else readSavedTranslation();});
+$('#translation-source').addEventListener('change',()=>{const s=sectionTranslations;if(s&&!s.busy&&!s.locked&&!editorDirty()&&!editorSaving&&!editorConflict){s.serial++;s.generationStatus='';s.status=$('#translation-source').value===s.metadata?.sourceLanguage?'Choose a target language to view saved text.':'Save the selected source language before viewing translations.';$('#translation-target').value='';translationPreviewClear();updateTranslationControls();}});
+$('#translation-target').addEventListener('change',()=>{if(['source','generation'].includes(sectionTranslations?.busy))return;if(!$('#translation-target').value&&sectionTranslations){sectionTranslations.serial++;sectionTranslations.generationStatus='';sectionTranslations.busy='';translationPreviewClear();sectionTranslations.status='Choose a target language to view saved text.';updateTranslationControls();}else readSavedTranslation();});
 $('#save-source-language').addEventListener('click',saveSourceLanguage);
 $('#refresh-translations').addEventListener('click',readSourceMetadata);
 $('#drawer-fields').addEventListener('input',updateTranslationControls);

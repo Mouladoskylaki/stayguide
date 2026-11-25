@@ -1,5 +1,5 @@
 import {createTranslationStore} from './translation-store.js';
-import {createTranslationService,TRANSLATABLE_SECTIONS,isGenerationLocale} from './translation-service.js';
+import {createTranslationService,TRANSLATABLE_SECTIONS,TRANSLATION_CONFIG,isGenerationLocale} from './translation-service.js';
 import {createOpenAITranslationProvider} from './openai-translation-provider.js';
 import {qrSvg} from './qr.js';
 import {previewWarning} from '../public/qr-tools.js';
@@ -123,6 +123,29 @@ export async function handleRequest(request,env){
       if(result.status==='invalid')return error('Invalid source declaration',400);
       if(result.status==='conflict')return json({error:'This section was updated. Reload its source metadata before declaring a language.',code:'source_version_conflict'},409);
       return json({error:'Source metadata is unavailable.',code:'source_metadata_unavailable'},500);
+    }
+    m=path.match(/^\/api\/guides\/([a-f0-9]{16})\/translation-capabilities$/);
+    if(m&&method==='GET'){
+      const row=await lookup(env.DB,m[1]);if(!row)return error('Not found',404);
+      if(!(await checkOwner(request,row)))return error('Not authorized',401);
+      const q=url.searchParams,section=q.get('section'),sourceLanguage=q.get('sourceLanguage'),target=q.get('targetLanguage'),version=Number(q.get('expectedSourceVersion'));
+      if([...q.keys()].length!==4||[...q.keys()].some(k=>!['section','sourceLanguage','targetLanguage','expectedSourceVersion'].includes(k))||!Object.hasOwn(TRANSLATABLE_SECTIONS,section)||!isGenerationLocale(sourceLanguage)||!isGenerationLocale(target)||!Number.isSafeInteger(version)||version<1||String(version)!==q.get('expectedSourceVersion'))return error('Invalid capability request',400);
+      // No adapter construction, live flag or key lookup. This binding is server-owned
+      // and supplied only by isolated offline tests, never by request/browser data.
+      const testOnly=env.TRANSLATION_OFFLINE_TEST===true&&env.TRANSLATION_PROVIDER?.mode==='openai'&&env.TRANSLATION_PROVIDER.enabled===true;
+      const capability=state=>json({generationAvailable:state==='available',testOnly,state,sourceVersion:version});
+      if(!testOnly)return capability('unavailable');
+      const store=createTranslationStore(env.DB),source=await store.source(row.id,section),c=TRANSLATION_CONFIG;
+      if(!source?.source_language)return capability('source_required');
+      if(source.source_language!==sourceLanguage||source.source_version!==version)return capability('source_changed');
+      if(sourceLanguage===target)return capability('same_language');
+      if(await store.cached(row.id,section,target,c.model,c.promptVersion,'openai'))return capability('cached');
+      const attempt=await store.attempted(row.id,section,sourceLanguage,target,version,c.model,c.promptVersion,'openai');
+      if(attempt)return capability(attempt.status==='reserved'&&attempt.lease_until>Date.now()?'attempt_pending':'attempt_terminal');
+      const raw=JSON.parse(source.source_text),text=TRANSLATABLE_SECTIONS[section].map(k=>raw[k]??'').join('\n');
+      if(!text.trim())return capability('empty');
+      if([...text].length>c.maxSourceCodePoints)return capability('input_limit');
+      return capability('available');
     }
     m=path.match(/^\/api\/guides\/([a-f0-9]{16})\/translations$/);
     if(m&&(method==='POST'||method==='GET')){

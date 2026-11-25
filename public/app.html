@@ -70,8 +70,11 @@
           <select id="translation-target" aria-describedby="translation-status"></select>
           <p id="translation-status" role="status" aria-live="polite" aria-atomic="true"></p>
           <dl id="translation-preview" hidden></dl>
+          <p id="translation-generation-note" class="translation-unavailable"></p>
+          <button type="button" id="generate-translation" class="button button-primary" hidden data-i18n="Translate saved text">Translate saved text</button>
+          <p id="translation-generation-status" role="status" aria-live="polite" aria-atomic="true" tabindex="-1"></p>
           <button type="button" id="refresh-translations" class="button button-secondary" data-i18n="Refresh saved status">Refresh saved status</button>
-          <p class="translation-unavailable" data-i18n="AI generation and translation editing are not available yet. Creating or retrying a translation is disabled.">AI generation and translation editing are not available yet. Creating or retrying a translation is disabled.</p>
+          <p class="translation-unavailable" data-i18n="Translation editing is not available yet.">Translation editing is not available yet.</p>
         </div>
       </details>
       <p id="editor-error" class="editor-error" role="alert" tabindex="-1" hidden></p>
