@@ -11,7 +11,7 @@ import {versionGuide} from '../src/guide-store.js';
 const root=fileURLToPath(new URL('..',import.meta.url));
 assert.equal(process.argv.length,3,'Supply the prepared disposable QA directory');
 const qa=await fs.realpath(path.resolve(process.argv[2]));
-assert(qa.startsWith(path.join(root,'.local/qa/sg-p31-w2-fix-')),'Only disposable W2-fix QA directories are allowed');
+assert((qa.startsWith(path.join(root,'.local/qa/sg-p31-w2-fix-'))||qa.startsWith(path.join(root,'.local/qa/sg-p31-w4b-b-'))),'Only disposable W2-fix QA directories are allowed');
 const config=JSON.parse(await fs.readFile(path.join(qa,'wrangler.local.json'),'utf8'));
 assert(!config.account_id&&!config.vars&&!config.secrets);
 assert.equal(config.d1_databases.length,6);
@@ -81,9 +81,9 @@ try{
   const restored=await (await save({welcome:a.guide.welcome},altered.revision)).json();assert.notEqual(restored.revision,a.revision);assert.equal((await save({rules:'Old writer'},a.revision)).status,409);
  });
  await test('translation persistence/cache/provenance and protected-field exclusion through actual Worker/D1',async()=>{
-  for(const section of ['welcome','rules']){const r=await request(endpoint()+'/translations','POST',{section,sourceLanguage:'en-GB',targetLanguage:'de-DE'});assert.equal(r.status,200);assert.equal((await r.json()).providerMode,'openai');}
+  for(const section of ['welcome','rules']){const declared=await request(endpoint()+'/translation-sources/'+section,'PATCH',{sourceLanguage:'en-GB',expectedSourceVersion:(await one(db,SQL.source,[created.id,section])).source_version});assert.equal(declared.status,200);const r=await request(endpoint()+'/translations','POST',{section,sourceLanguage:'en-GB',targetLanguage:'de-DE',expectedSourceVersion:(await one(db,SQL.source,[created.id,section])).source_version});assert.equal(r.status,200);assert.equal((await r.json()).providerMode,'openai');}
   const before=await (await request('/__verification/stats')).json();assert.equal(before.mockCalls,2);
-  const cache=await request(endpoint()+'/translations','POST',{section:'welcome',sourceLanguage:'en-GB',targetLanguage:'de-DE'});assert.equal(cache.status,200);
+  const cache=await request(endpoint()+'/translations','POST',{section:'welcome',sourceLanguage:'en-GB',targetLanguage:'de-DE',expectedSourceVersion:(await one(db,SQL.source,[created.id,'welcome'])).source_version});assert.equal(cache.status,200);
   const page=await (await request('/g/'+created.id+'?lang=de-DE')).text();assert(page.includes('OFFLINE MOCK Changed. 112.'));assert(!page.includes(created.token));
   assert.equal((await (await request('/__verification/stats')).json()).mockCalls,2);
   assert.equal((await one(db,'SELECT COUNT(*) AS n FROM translation_attempts')).n,2);
@@ -97,7 +97,7 @@ try{
   assert.equal((await save({welcome:'Edited source. 112.'},old.revision)).status,200);
   assert.equal((await store.source(created.id,'welcome')).source_version,welcome.source_version+1);assert.deepEqual(await store.source(created.id,'rules'),rules);assert.deepEqual(await service.view(created.id,'rules','de-DE'),manual);assert.equal((await service.view(created.id,'welcome','de-DE')).status,'original');
   const before=await snapshot(db);assert.equal((await save({rules:'Must not overwrite'},old.revision)).status,409);assert.deepEqual(await snapshot(db),before);
-  const regenerated=await request(endpoint()+'/translations','POST',{section:'welcome',sourceLanguage:'en-GB',targetLanguage:'de-DE'});assert.equal(regenerated.status,200);
+  const regenerated=await request(endpoint()+'/translations','POST',{section:'welcome',sourceLanguage:'en-GB',targetLanguage:'de-DE',expectedSourceVersion:(await one(db,SQL.source,[created.id,'welcome'])).source_version});assert.equal(regenerated.status,200);
  });
  await test('concurrent actual HTTP saves reach the atomic D1 update with the same prior revision',async()=>{
   const old=await read();await request('/__verification/arm');
@@ -113,9 +113,9 @@ try{
   assert.equal((await one(leaseDb,'SELECT COUNT(*) AS n,SUM(reservation_nano) AS reserved FROM translation_attempts')).n,1);
   assert.equal((await one(leaseDb,'SELECT SUM(reservation_nano) AS reserved FROM translation_attempts')).reserved,660000);report.concurrentClaims={submitted,admitted};
   const owner=['claim-a','claim-b'][admitted.findIndex(Boolean)];
-  assert(await store.claim(claim(source,'replacement','de-DE',130001,160001)));
+  assert.equal(await store.claim(claim(source,'replacement','de-DE',130001,160001)),false);
   const before=await snapshot(leaseDb);assert.equal(await store.publish(owner,JSON.stringify({welcome:'Old 112.'}),130002),false);assert.deepEqual(await snapshot(leaseDb),before);
-  assert(await store.publish('replacement',JSON.stringify({welcome:'New 112.'}),130002));assert.equal((await one(leaseDb,'SELECT SUM(reservation_nano) AS reserved FROM translation_attempts')).reserved,1320000);
+  assert.equal(await store.publish('replacement',JSON.stringify({welcome:'New 112.'}),130002),false);assert.equal((await one(leaseDb,'SELECT SUM(reservation_nano) AS reserved FROM translation_attempts')).reserved,660000);
  });
  await test('budget reservation race and failure/missing-row results preserve the ledger',async()=>{
   const store=await synthetic(budgetDb,'budget-fixture'),source=await store.source('budget-fixture','welcome');await budgetDb.prepare('UPDATE translation_policy SET budget_nano=660000').run();

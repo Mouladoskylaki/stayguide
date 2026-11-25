@@ -6,7 +6,7 @@ import {fileURLToPath} from 'node:url';
 import {createTranslationStore,TRANSLATION_SQL as SQL} from '../src/translation-store.js';
 import {createTranslationService} from '../src/translation-service.js';
 const root=fileURLToPath(new URL('..',import.meta.url));assert.equal(process.argv.length,3);
-const qa=await fs.realpath(path.resolve(process.argv[2]));assert(qa.startsWith(path.join(root,'.local/qa/sg-p31-w4b-a-')));
+const qa=await fs.realpath(path.resolve(process.argv[2]));assert((qa.startsWith(path.join(root,'.local/qa/sg-p31-w4b-a-'))||qa.startsWith(path.join(root,'.local/qa/sg-p31-w4b-b-'))));
 const {Miniflare,convertV4MiniflareOptions}=await import(path.join(root,'.local/tooling/sg-p31-w2/node_modules/miniflare/dist/src/index.js'));
 const esbuild=await import(path.join(root,'.local/tooling/sg-p31-w2/node_modules/esbuild/lib/main.js'));
 const script=`import {handleRequest} from './src/worker.js';import {TRANSLATION_SQL as SQL} from './src/translation-store.js';

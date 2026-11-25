@@ -114,6 +114,12 @@ async function execute({directory,base,execution,fetchImpl,getCredential,preflig
   requireSafe(created.status===201,'fixture_creation_failed');const {id,token}=await created.json();
   const body={section:plan.section,sourceLanguage:plan.sourceLanguage,targetLanguage:plan.targetLanguage};
   const endpoint='/api/guides/'+id+'/translations';
+  // Compatibility for synthetic OFFLINE callers only. The consumed live path is unchanged.
+  if(execution==='offline-mock'){
+   const declared=await handleRequest(request('/api/guides/'+id+'/translation-sources/'+plan.section,'PATCH',{sourceLanguage:plan.sourceLanguage,expectedSourceVersion:1},token),env);
+   requireSafe(declared.status===200,'offline_declaration_failed');
+   body.expectedSourceVersion=(await declared.json()).sourceVersion;
+  }
   const generated=await handleRequest(request(endpoint,'POST',body,token),env);const result=await generated.json();
   requireSafe(generated.status===200&&result.status==='translated'&&result.providerMode==='openai','generation_failed');
   const text=result.fields?.appliances;

@@ -34,7 +34,7 @@ test('translation language, claim, publication, reconciliation, correction and f
  const local=createLocalDb();await local.prepare('INSERT INTO guides').bind('g','SYNTHETIC_HASH',JSON.stringify({welcome:'Welcome. 112.',rules:'No smoking.'}),'same','same').run();
  const db=triggerTotals(local),store=createTranslationStore(db),service=createTranslationService({store});
  assert(await service.setSourceLanguage('g','welcome','en-GB'));
- const translated=await service.generate('g','welcome','de-DE');assert.equal(translated.status,'translated');
+ const translated=await generateSaved(service,'g','welcome','de-DE');assert.equal(translated.status,'translated');
  assert(await service.correct('g','welcome','de-DE',{welcome:'Corrected. 112.'},translated.correction));
  assert.equal(await service.correct('g','welcome','de-DE',{welcome:'Stale. 112.'},translated.correction),false);
  const source=await store.source('g','welcome');
@@ -50,3 +50,9 @@ test('returned write results from the local adapter persist through all and firs
  assert.equal((await store.source('g','welcome')).source_language,'de-DE');
  assert.equal(await db.prepare(TRANSLATION_SQL.language).bind('missing','welcome','de-DE').first(),null);
 });
+
+// Offline callers explicitly obtain a saved expectation before submitting generation.
+async function generateSaved(service,id,section,target){
+ const metadata=await service.sourceMetadata(id,section);
+ return service.generate(id,section,target,metadata.metadata?.sourceLanguage??'en-GB',metadata.metadata?.sourceVersion??1);
+}

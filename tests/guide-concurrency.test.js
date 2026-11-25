@@ -67,7 +67,7 @@ test('a write between service read and update is rejected by SQL, not only a rea
 test('accepted save invalidates changed section only; conflict preserves sources, manual results and reservations',async t=>{
  fs.mkdirSync('.local/qa',{recursive:true});const directory=fs.mkdtempSync('.local/qa/sg-w1-translations-');t.after(()=>fs.rmSync(directory,{recursive:true,force:true}));const file=directory+'/disposable.json';
  const f=await setup(createLocalDb(file)),store=createTranslationStore(f.db),service=createTranslationService({store});
- for(const section of ['welcome','rules']){await service.setSourceLanguage(f.created.id,section,'en-GB');const t=await service.generate(f.created.id,section,'de-DE');assert.equal(t.status,'translated');assert(await service.correct(f.created.id,section,'de-DE',t.fields,t.correction));}
+ for(const section of ['welcome','rules']){await service.setSourceLanguage(f.created.id,section,'en-GB');const t=await service.generate(f.created.id,section,'de-DE','en-GB',(await service.sourceMetadata(f.created.id,section)).metadata.sourceVersion);assert.equal(t.status,'translated');assert(await service.correct(f.created.id,section,'de-DE',t.fields,t.correction));}
  const stale=await f.read(),rules=await store.source(f.created.id,'rules'),welcome=await store.source(f.created.id,'welcome');
  assert.equal((await f.call('PATCH',{welcome:'Changed. Call 112.'},etag(stale.revision))).status,200);
  assert.equal((await store.source(f.created.id,'welcome')).source_version,welcome.source_version+1);assert.deepEqual(await store.source(f.created.id,'rules'),rules);assert.equal((await service.view(f.created.id,'rules','de-DE')).origin,'manual');

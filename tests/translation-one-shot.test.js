@@ -98,7 +98,7 @@ test('persistent one-attempt budget blocks a new cache-miss operation even outsi
  const {createLocalDb}=await import('../node/db.mjs'),{createTranslationStore}=await import('../src/translation-store.js'),{createTranslationService}=await import('../src/translation-service.js');
  const file=dir+'/disposable.json',state=JSON.parse(await fs.readFile(file,'utf8')),id=Object.keys(state.guides)[0];let calls=0;
  const service=createTranslationService({store:createTranslationStore(createLocalDb(file)),provider:{mode:'openai',enabled:true,async translate(){calls++;throw Error('Must not dispatch');}}});
- assert.equal((await service.generate(id,'appliances','fr-FR')).category,'busy_or_limit');assert.equal(calls,0);assert.equal(mock.calls.length,2);
+ assert.equal((await service.generate(id,'appliances','fr-FR','en-GB',2)).category,'busy_or_limit');assert.equal(calls,0);assert.equal(mock.calls.length,2);
 });
 test('guard, reservation and request journal exist before each mocked HTTP dispatch',async t=>{
  const dir=await fixture(t),mock=http(async url=>{

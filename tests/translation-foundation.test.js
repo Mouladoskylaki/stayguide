@@ -19,7 +19,7 @@ function spyProvider(transform=fields=>fields){let calls=0,payload;return {mode:
 test('source language is unknown until explicitly declared; views never generate',async()=>{
  const p=spyProvider(),{service}=await setup({provider:p});
  assert.equal((await service.view(id,'welcome','el-GR')).language,null);
- assert.equal((await service.generate(id,'welcome','el-GR')).category,'source_language_required');
+ assert.equal((await generateSaved(service,id,'welcome','el-GR')).category,'source_language_required');
  assert.equal(p.calls,0);await service.setSourceLanguage(id,'welcome','el-GR');
  assert.equal((await service.view(id,'welcome','el-GR')).status,'original');
  assert.equal((await service.view(id,'welcome','invalid')).status,'original');
@@ -27,25 +27,25 @@ test('source language is unknown until explicitly declared; views never generate
 });
 test('cache storage, separate targets, manual correction and property isolation',async()=>{
  const p=spyProvider(),{service}=await setup({provider:p});await service.setSourceLanguage(id,'welcome','en-GB');
- const first=await service.generate(id,'welcome','el-GR');assert.equal(first.status,'translated');assert.equal(first.providerMode,'mock');
- for(let i=0;i<4;i++){await service.view(id,'welcome','el-GR');await service.generate(id,'welcome','el-GR');}assert.equal(p.calls,1);
- await service.generate(id,'welcome','de-DE');assert.equal(p.calls,2);
+ const first=await generateSaved(service,id,'welcome','el-GR');assert.equal(first.status,'translated');assert.equal(first.providerMode,'mock');
+ for(let i=0;i<4;i++){await service.view(id,'welcome','el-GR');await generateSaved(service,id,'welcome','el-GR');}assert.equal(p.calls,1);
+ await generateSaved(service,id,'welcome','de-DE');assert.equal(p.calls,2);
  assert.equal(await service.correct(id,'welcome','el-GR',{welcome:'A corrected welcome. Call 112.'},first.correction),true);
- assert.equal((await service.generate(id,'welcome','el-GR')).origin,'manual');assert.equal(p.calls,2);
+ assert.equal((await generateSaved(service,id,'welcome','el-GR')).origin,'manual');assert.equal(p.calls,2);
  assert.equal((await service.view('missing','welcome','el-GR')).status,'missing');
 });
 test('editing one section invalidates it and preserves other sections and manual content',async()=>{
  const {service,edit}=await setup();for(const section of ['welcome','rules'])await service.setSourceLanguage(id,section,'en-GB');
- await service.generate(id,'welcome','el-GR');await service.generate(id,'rules','el-GR');
+ await generateSaved(service,id,'welcome','el-GR');await generateSaved(service,id,'rules','el-GR');
  await service.correct(id,'rules','el-GR',{rules:'Do not smoke. Thank you.'},(await service.view(id,'rules','el-GR')).correction);
  await edit({welcome:'A new welcome! Call 112.'});assert.equal((await service.view(id,'welcome','el-GR')).status,'original');
  assert.equal((await service.view(id,'rules','el-GR')).origin,'manual');
- await service.generate(id,'welcome','el-GR');assert.equal((await service.view(id,'welcome','el-GR')).status,'translated');
+ await generateSaved(service,id,'welcome','el-GR');assert.equal((await service.view(id,'welcome','el-GR')).status,'translated');
  await edit({wifi_password:'ANOTHER_EXCLUDED_VALUE'});assert.equal((await service.view(id,'welcome','el-GR')).status,'translated');
  await edit({welcome:'A new welcome! Call 112.'});assert.equal((await service.view(id,'welcome','el-GR')).status,'translated');
 });
 test('arrival groups both fields and language changes invalidate previous translations',async()=>{
- const {service,edit}=await setup();await service.setSourceLanguage(id,'arrival','en-GB');await service.generate(id,'arrival','el-GR');
+ const {service,edit}=await setup();await service.setSourceLanguage(id,'arrival','en-GB');await generateSaved(service,id,'arrival','el-GR');
  await edit({checkout:'Before 11:00.'});assert.equal((await service.view(id,'arrival','el-GR')).status,'original');
  await service.setSourceLanguage(id,'arrival','de-DE');assert.equal((await service.view(id,'arrival','el-GR')).language,'de-DE');
 });
@@ -53,21 +53,21 @@ test('concurrent requests from independent services claim exactly once',async()=
  let release,entered;const started=new Promise(r=>entered=r),pending=new Promise(r=>release=r);let calls=0;
  const provider={mode:'mock',async translate(p){calls++;entered();await pending;return {fields:p.fields,usage:{inputTokens:100,outputTokens:100,reasoningTokens:0}};}};
  const {db,store,service}=await setup({provider});await service.setSourceLanguage(id,'welcome','en-GB');
- const first=service.generate(id,'welcome','el-GR');await started;
+ const first=generateSaved(service,id,'welcome','el-GR');await started;
  const other=createTranslationService({store:createTranslationStore(db),provider,now:()=>100000});
- assert.equal((await other.generate(id,'welcome','el-GR')).category,'busy_or_limit');release();assert.equal((await first).status,'translated');assert.equal(calls,1);
+ assert.equal((await generateSaved(other,id,'welcome','el-GR')).category,'attempt_pending');release();assert.equal((await first).status,'translated');assert.equal(calls,1);
 });
-test('expired lease can be reclaimed but old holder cannot publish; reservations stay consumed',async()=>{
+test('expired lease cannot be reclaimed and old holder cannot publish; reservations stay consumed',async()=>{
  const {store}=await setup();await store.setLanguage(id,'welcome','en-GB');const s=await store.source(id,'welcome');
  const a={...s,claim_id:'first',target_language:'el-GR',model:CONFIG.model,prompt_version:CONFIG.promptVersion,created_ms:100000,lease_until:100010,reservation_nano:CONFIG.reservationNano};
- assert.equal(await store.claim(a),true);assert.equal(await store.claim({...a,claim_id:'second',created_ms:100011,lease_until:100100}),true);
+ assert.equal(await store.claim(a),true);assert.equal(await store.claim({...a,claim_id:'second',created_ms:100011,lease_until:100100}),false);
  assert.equal(await store.publish('first','{}',100012),false);assert.equal(await store.publish('second','{}',100101),false);
 });
 test('source edits during provider work reject stale results',async()=>{
  let release,entered;const started=new Promise(r=>entered=r),pending=new Promise(r=>release=r);
  const p={mode:'mock',async translate(payload){entered();await pending;return {fields:payload.fields,usage:{inputTokens:100,outputTokens:100,reasoningTokens:0}};}};
  const {service,edit}=await setup({provider:p});await service.setSourceLanguage(id,'welcome','en-GB');
- const work=service.generate(id,'welcome','el-GR');await started;await edit({welcome:'Changed source.'});release();
+ const work=generateSaved(service,id,'welcome','el-GR');await started;await edit({welcome:'Changed source.'});release();
  assert.equal((await work).category,'stale_or_expired');assert.equal((await service.view(id,'welcome','el-GR')).status,'original');
 });
 test('provider failures are sanitized and protected values/output bounds are enforced',async()=>{
@@ -77,40 +77,41 @@ test('provider failures are sanitized and protected values/output bounds are enf
    return {fields:behavior==='missing'?{}:behavior==='labels'?{welcome:'No number here.'}:payload.fields,usage:{inputTokens:100,outputTokens:behavior==='badUsage'?801:100,reasoningTokens:behavior==='reasoning'?1:0}};
   };
   const {service}=await setup({provider:p});await service.setSourceLanguage(id,'welcome','en-GB');
-  assert.deepEqual(await service.generate(id,'welcome','el-GR'),{status:'failed',category:'translation_unavailable'});
+  assert.deepEqual(await generateSaved(service,id,'welcome','el-GR'),{status:'failed',category:'translation_unavailable'});
   assert.equal((await service.view(id,'welcome','el-GR')).status,'original');
  }
 });
 test('strict projection excludes secrets, identifiers and Wi-Fi fields from provider payload',async()=>{
- const p=spyProvider(),{service}=await setup({provider:p});await service.setSourceLanguage(id,'welcome','en-GB');await service.generate(id,'welcome','el-GR');
+ const p=spyProvider(),{service}=await setup({provider:p});await service.setSourceLanguage(id,'welcome','en-GB');await generateSaved(service,id,'welcome','el-GR');
  const payload=JSON.stringify(p.payload);for(const value of [id,'EXCLUDED_WIFI_SENTINEL','EXCLUDED_AUTH_HASH','EXCLUDED_NETWORK','Synthetic property'])assert(!payload.includes(value));
  assert.deepEqual(Object.keys(p.payload).sort(),['fields','instructions','protectedStrings','sourceLanguage','targetLanguage']);
- assert.equal((await service.generate(id,'wifi','el-GR')).category,'invalid_selection');
+ assert.equal((await generateSaved(service,id,'wifi','el-GR')).category,'invalid_selection');
  assert.throws(()=>createTranslationService({store:{},provider:{mode:'live',translate(){}}}),/mock/);
 });
 test('oversized or credential-like source never reaches the mock provider',async()=>{
  const p=spyProvider(),{service,edit}=await setup({provider:p});await service.setSourceLanguage(id,'welcome','en-GB');
- await edit({welcome:'a'.repeat(1201)});assert.equal((await service.generate(id,'welcome','el-GR')).category,'input_limit');
- await edit({welcome:'Bearer SYNTHETIC_CREDENTIAL'});assert.equal((await service.generate(id,'welcome','el-GR')).status,'failed');assert.equal(p.calls,0);
+ await edit({welcome:'a'.repeat(1201)});assert.equal((await generateSaved(service,id,'welcome','el-GR')).category,'input_limit');
+ await edit({welcome:'Bearer SYNTHETIC_CREDENTIAL'});assert.equal((await generateSaved(service,id,'welcome','el-GR')).status,'failed');assert.equal(p.calls,0);
 });
 test('append-only reservations, request limit and minute rate gate work together',async()=>{
  const {store}=await setup();await store.setLanguage(id,'welcome','en-GB');const s=await store.source(id,'welcome');
  const a={...s,claim_id:'large',target_language:'el-GR',model:CONFIG.model,prompt_version:CONFIG.promptVersion,created_ms:100000,lease_until:100010,reservation_nano:100000000};
- assert(await store.claim(a));await store.fail('large');assert.equal(await store.claim({...a,claim_id:'over',created_ms:100020,lease_until:100030,reservation_nano:1}),false);
+ assert(await store.claim(a));await store.fail('large');assert.equal(await store.claim({...a,claim_id:'over',target_language:'fr-FR',created_ms:100020,lease_until:100030,reservation_nano:1}),false);
  const fresh=await setup();await fresh.store.setLanguage(id,'welcome','en-GB');const source=await fresh.store.source(id,'welcome');
  for(let i=0;i<8;i++){
   const at=200000+Math.floor(i/4)*61000;
-  assert(await fresh.store.claim({...a,...source,claim_id:'q'+i,created_ms:at,lease_until:at+10,reservation_nano:1}));await fresh.store.fail('q'+i);
-  if(i===3)assert.equal(await fresh.store.claim({...a,...source,claim_id:'rate',created_ms:at,lease_until:at+10,reservation_nano:1}),false);
+  assert(await fresh.store.claim({...a,...source,claim_id:'q'+i,target_language:['el-GR','de-DE','fr-FR','it-IT','es-ES','ja-JP','zh-CN','ar'][i],created_ms:at,lease_until:at+10,reservation_nano:1}));await fresh.store.fail('q'+i);
+  if(i===3)assert.equal(await fresh.store.claim({...a,...source,claim_id:'rate',target_language:'ar',created_ms:at,lease_until:at+10,reservation_nano:1}),false);
  }
- assert.equal(await fresh.store.claim({...a,...source,claim_id:'ninth',created_ms:500000,lease_until:500010,reservation_nano:1}),false);
+ await fresh.edit({welcome:'New limit fixture source.'});const ninthSource=await fresh.store.source(id,'welcome');
+ assert.equal(await fresh.store.claim({...a,...ninthSource,claim_id:'ninth',created_ms:500000,lease_until:500010,reservation_nano:1}),false);
 });
 test('legacy JSON guides persist translations across independent adapter instances',async()=>{
  fs.mkdirSync('.local/qa',{recursive:true});const dir=fs.mkdtempSync('.local/qa/sg-p31-phase3a-'),file=path.join(dir,'guides.json');
  try{
   const legacy={[id]:{id,edit_token_hash:'HASH_ONLY',content_json:JSON.stringify(guide),created_at:'now',updated_at:'now'}};fs.writeFileSync(file,JSON.stringify(legacy));
   const before=fs.readFileSync(file,'utf8'),db=createLocalDb(file);assert.equal(fs.readFileSync(file,'utf8'),before);
-  const service=createTranslationService({store:createTranslationStore(db)});await service.setSourceLanguage(id,'welcome','en-GB');await service.generate(id,'welcome','el-GR');
+  const service=createTranslationService({store:createTranslationStore(db)});await service.setSourceLanguage(id,'welcome','en-GB');await generateSaved(service,id,'welcome','el-GR');
   const other=createTranslationService({store:createTranslationStore(createLocalDb(file))});assert.equal((await other.view(id,'welcome','el-GR')).status,'translated');
   assert.equal(JSON.parse((await db.prepare('SELECT * FROM guides WHERE id=?1').bind(id).first()).content_json).wifi_password,guide.wifi_password);
  }finally{fs.rmSync(dir,{recursive:true,force:true});}
@@ -119,7 +120,7 @@ test('generation deadline fails safely without retry or late publication',async 
  let expire,calls=0;const provider={mode:'mock',translate(){calls++;return new Promise(()=>{});}};
  const {service}=await setup({provider});await service.setSourceLanguage(id,'welcome','en-GB');
  t.mock.method(globalThis,'setTimeout',callback=>{expire=callback;return 'mock-timer';});t.mock.method(globalThis,'clearTimeout',()=>{});
- const work=service.generate(id,'welcome','el-GR');for(let i=0;i<100&&!expire;i++)await Promise.resolve();assert.equal(typeof expire,'function');expire();
+ const work=generateSaved(service,id,'welcome','el-GR');for(let i=0;i<100&&!expire;i++)await Promise.resolve();assert.equal(typeof expire,'function');expire();
  assert.equal((await work).status,'failed');assert.equal(calls,1);assert.equal((await service.view(id,'welcome','el-GR')).status,'original');
 });
 test('read failures expose no storage error details and do not invoke the provider',async()=>{
@@ -144,7 +145,7 @@ test('translation HTTP access requires authorization and public guest views stay
 });
 async function readyCorrection(){
  const fixture=await setup();await fixture.service.setSourceLanguage(id,'welcome','en-GB');
- await fixture.service.generate(id,'welcome','el-GR');
+ await generateSaved(fixture.service,id,'welcome','el-GR');
  return {...fixture,expected:(await fixture.service.view(id,'welcome','el-GR')).correction};
 }
 test('valid correction carries submitted source and exact translation identity',async()=>{
@@ -153,21 +154,21 @@ test('valid correction carries submitted source and exact translation identity',
  const saved=await service.view(id,'welcome','el-GR');assert.equal(saved.origin,'manual');assert.equal(saved.correction.translationId,expected.translationId);
 });
 test('old correction after source edit and regeneration cannot change newer content',async()=>{
- const {service,edit,expected}=await readyCorrection();await edit({welcome:'New arrival text. Call 112.'});await service.generate(id,'welcome','el-GR');
+ const {service,edit,expected}=await readyCorrection();await edit({welcome:'New arrival text. Call 112.'});await generateSaved(service,id,'welcome','el-GR');
  const before=await service.view(id,'welcome','el-GR');
  assert.equal(await service.correct(id,'welcome','el-GR',{welcome:'Old correction. Call 112.'},expected),false);
  assert.deepEqual(await service.view(id,'welcome','el-GR'),before);
 });
 test('source edit and regeneration between correction reads reject the original expectations',async()=>{
  const {service,store,edit,expected}=await readyCorrection();let changed=false;
- const wrapped={...store,async source(...args){const old=await store.source(...args);if(!changed){changed=true;await edit({welcome:'New source between reads. Call 112.'});await service.generate(id,'welcome','el-GR');}return old;}};
+ const wrapped={...store,async source(...args){const old=await store.source(...args);if(!changed){changed=true;await edit({welcome:'New source between reads. Call 112.'});await generateSaved(service,id,'welcome','el-GR');}return old;}};
  const editor=createTranslationService({store:wrapped,now:()=>100000});
  assert.equal(await editor.correct(id,'welcome','el-GR',{welcome:'Correction of old source. Call 112.'},expected),false);
  assert.equal((await service.view(id,'welcome','el-GR')).fields.welcome,'New source between reads. Call 112.');
 });
 test('translation replacement between reads and atomic update rejects stale identity',async()=>{
  const {service,store,edit,expected}=await readyCorrection();
- const wrapped={...store,async correct(args){await edit({welcome:'Replacement source. Call 112.'});await service.generate(id,'welcome','el-GR');return store.correct(args);}};
+ const wrapped={...store,async correct(args){await edit({welcome:'Replacement source. Call 112.'});await generateSaved(service,id,'welcome','el-GR');return store.correct(args);}};
  const editor=createTranslationService({store:wrapped,now:()=>100000});
  assert.equal(await editor.correct(id,'welcome','el-GR',{welcome:'Stale correction. Call 112.'},expected),false);
  assert.equal((await service.view(id,'welcome','el-GR')).fields.welcome,'Replacement source. Call 112.');
@@ -204,3 +205,9 @@ test('correction source/cache/update storage failures return false without raw e
   assert.equal(await service.correct(id,'welcome','el-GR',{welcome:'Corrected. Call 112.'},expected),false);
  }
 });
+
+// Offline callers explicitly obtain a saved expectation before submitting generation.
+async function generateSaved(service,id,section,target){
+ const metadata=await service.sourceMetadata(id,section);
+ return service.generate(id,section,target,metadata.metadata?.sourceLanguage??'en-GB',metadata.metadata?.sourceVersion??1);
+}

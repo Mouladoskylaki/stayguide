@@ -9,6 +9,7 @@ const sourceMetadata=row=>{
  return {section:row.section,sourceLanguage:row.source_language,sourceVersion:row.source_version,declared:row.source_language!==null};
 };
 export {validLocale as isTranslationLocale};
+export const isGenerationLocale=value=>declarationLocales.includes(value);
 const bytes=value=>new TextEncoder().encode(value).length;
 const protectedValues=text=>[...new Set(text.match(/https?:\/\/[^\s]+|[\w.+-]+@[\w.-]+\.[A-Za-z]+|\b[A-Z][A-Z0-9_-]{1,}\b|\d+(?:[.:,/-]\d+)*/g)||[])];
 const safeText=text=>typeof text==='string'&&!/(?:sk-[A-Za-z0-9_-]{20,}|Bearer\s|-----BEGIN.*PRIVATE KEY)/.test(text);
@@ -65,13 +66,22 @@ export function createTranslationService({store,provider=createMockTranslationPr
    try{return await store.setLanguage(id,section,language);}catch{return false;}
   },
   async view(...args){try{return await fallback(...args);}catch{return {status:'unavailable',fields:{},language:null};}},
-  async generate(id,section,target,expectedSourceLanguage){
+  async generate(id,section,target,expectedSourceLanguage,expectedSourceVersion){
    let claim;
    try{
-    if(!TRANSLATABLE_SECTIONS[section]||!validLocale(target))return {status:'blocked',category:'invalid_selection'};
-    const source=await store.source(id,section);if(!source?.source_language)return {status:'blocked',category:'source_language_required'};
-    if(expectedSourceLanguage&&source.source_language!==expectedSourceLanguage)return {status:'blocked',category:'source_language_changed'};
-    const existing=await fallback(id,section,target);if(existing.status==='translated'||target===source.source_language)return existing;
+    if(!Object.hasOwn(TRANSLATABLE_SECTIONS,section)||!validLocale(target))return {status:'blocked',category:'invalid_selection'};
+    const source=await store.source(id,section);if(!source)return {status:'blocked',category:'source_not_found'};if(!source.source_language)return {status:'blocked',category:'source_language_required'};
+    if(!Number.isSafeInteger(expectedSourceVersion)||expectedSourceVersion<1||!validLocale(expectedSourceLanguage))return {status:'blocked',category:'invalid_expectation'};
+    if(source.source_language!==expectedSourceLanguage)return {status:'blocked',category:'source_language_changed'};
+    if(source.source_version!==expectedSourceVersion)return {status:'blocked',category:'source_version_changed'};
+    const existing=await fallback(id,section,target);
+    // fallback reads independently: never return a newer cached version for old expectations.
+    const checked=await store.source(id,section);
+    if(!checked||checked.source_language!==expectedSourceLanguage||checked.source_version!==expectedSourceVersion)return {status:'blocked',category:'source_version_changed'};
+    if(existing.status==='translated'&&existing.correction.sourceVersion!==expectedSourceVersion)return {status:'blocked',category:'source_version_changed'};
+    if(existing.status==='translated'||target===source.source_language)return existing;
+    const attempted=await store.attempted(id,section,expectedSourceLanguage,target,expectedSourceVersion,config.model,config.promptVersion,provider.mode);
+    if(attempted)return {status:'blocked',category:attempted.status==='reserved'&&attempted.lease_until>now()?'attempt_pending':'attempt_terminal'};
     const fields=fieldsFrom(source),sourceText=Object.values(fields).join('\n');
     if(!sourceText.trim())return existing;
     const payload={instructions:config.instructions,sourceLanguage:source.source_language,targetLanguage:target,fields,protectedStrings:protectedValues(sourceText)};
@@ -79,7 +89,12 @@ export function createTranslationService({store,provider=createMockTranslationPr
     if([...sourceText].length>config.maxSourceCodePoints||(provider.mode==='mock'&&bytes(JSON.stringify(payload))>config.maxInputTokens))return {status:'blocked',category:'input_limit'};
     if(provider.mode==='openai'&&!provider.enabled)return {status:'blocked',category:'live_disabled'};
     claim=crypto.randomUUID();const started=now();
-    if(!await store.claim({claim_id:claim,guide_id:id,section,source_language:source.source_language,target_language:target,source_version:source.source_version,model:config.model,prompt_version:config.promptVersion,created_ms:started,lease_until:started+config.leaseMs,reservation_nano:config.reservationNano,provider_mode:provider.mode}))return {status:'blocked',category:'busy_or_limit'};
+    if(!await store.claim({claim_id:claim,guide_id:id,section,source_language:source.source_language,target_language:target,source_version:expectedSourceVersion,model:config.model,prompt_version:config.promptVersion,created_ms:started,lease_until:started+config.leaseMs,reservation_nano:config.reservationNano,provider_mode:provider.mode})){
+     const current=await store.source(id,section);
+     if(!current||current.source_version!==expectedSourceVersion||current.source_language!==expectedSourceLanguage)return {status:'blocked',category:'source_version_changed'};
+     const prior=await store.attempted(id,section,expectedSourceLanguage,target,expectedSourceVersion,config.model,config.promptVersion,provider.mode);
+     return {status:'blocked',category:prior?(prior.status==='reserved'&&prior.lease_until>now()?'attempt_pending':'attempt_terminal'):'busy_or_limit'};
+    }
     if(now()>=started+config.leaseMs){await store.fail(claim);return {status:'blocked',category:'stale_or_expired'};}
     let timer;const controller=new AbortController();
     let response;
@@ -89,11 +104,13 @@ export function createTranslationService({store,provider=createMockTranslationPr
     if(provider.mode==='openai'&&!await store.reconcile(claim,u))throw Error('Usage reconciliation failed');
     if(!u||!Number.isSafeInteger(u.inputTokens)||u.inputTokens<1||u.inputTokens>config.maxInputTokens||!Number.isSafeInteger(u.outputTokens)||u.outputTokens<1||u.outputTokens>config.maxOutputTokens||u.reasoningTokens!==0||!validateFields(response.fields,fields))throw Error('Invalid provider result');
     if(!await store.publish(claim,JSON.stringify(response.fields),now()))return {status:'blocked',category:'stale_or_expired'};
-    return await fallback(id,section,target);
+    const saved=await fallback(id,section,target),current=await store.source(id,section);
+    if(!current||current.source_version!==expectedSourceVersion||current.source_language!==expectedSourceLanguage||saved.status==='translated'&&saved.correction.sourceVersion!==expectedSourceVersion)return {status:'blocked',category:'stale_or_expired'};
+    return saved;
    }catch(error){
     if(claim&&provider.mode==='openai'&&error?.usage){try{await store.reconcile(claim,error.usage);}catch{}}
     if(claim){try{await store.fail(claim);}catch{}}
-    return {status:'failed',category:'translation_unavailable'};
+    return {status:'failed',category:error?.category==='request_timeout'||error?.message==='timeout'?'translation_timeout_uncertain':'translation_unavailable'};
    }
   },
   async correct(id,section,target,fields,expected){

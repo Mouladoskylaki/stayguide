@@ -42,6 +42,7 @@ export function createLocalDb(file=null){
   if(operation){
    const [id,section]=p,s=state.sources[sourceKey(id,section)];
    if(operation==='source')return clone(s??null);
+   if(operation==='attempted')return clone(Object.values(state.attempts).find(a=>entryKey(a)===entryKey({guide_id:id,section,source_language:p[2],target_language:p[3],source_version:p[4],model:p[5],prompt_version:p[6],provider_mode:p[7]}))??null);
    if(operation==='cached')return clone(Object.values(state.translations).find(t=>t.guide_id===id&&t.section===section&&t.target_language===p[2]&&t.model===p[3]&&t.prompt_version===p[4]&&t.provider_mode===p[5]&&t.status==='ready'&&current(t))??null);
    if(operation==='language'){
     if(!s||s.source_language===p[2])return 0;s.source_language=p[2];s.source_version++;invalidate(id,section);return 1;
@@ -55,7 +56,7 @@ export function createLocalDb(file=null){
     const a=Object.fromEntries(['claim_id','guide_id','section','source_language','target_language','source_version','model','prompt_version','created_ms','lease_until','reservation_nano','provider_mode'].map((k,i)=>[k,p[i]]));
     if(!['mock','openai'].includes(a.provider_mode))throw Error('Invalid provider mode');
     const source=state.sources[sourceKey(a.guide_id,a.section)],attempts=Object.values(state.attempts),policy=state.policy,old=state.translations[entryKey(a)];
-    if(!source||!current(a)||a.lease_until<=a.created_ms||a.reservation_nano<=0||attempts.length>=policy.max_requests||attempts.reduce((n,x)=>n+x.reservation_nano,0)+a.reservation_nano>policy.budget_nano||attempts.filter(x=>x.created_ms>=a.created_ms-60000).length>=policy.per_minute||old&&(old.status==='ready'||old.status==='pending'&&old.lease_until>a.created_ms))return 0;
+    if(attempts.some(x=>entryKey(x)===entryKey(a))||!source||!current(a)||a.lease_until<=a.created_ms||a.reservation_nano<=0||attempts.length>=policy.max_requests||attempts.reduce((n,x)=>n+x.reservation_nano,0)+a.reservation_nano>policy.budget_nano||attempts.filter(x=>x.created_ms>=a.created_ms-60000).length>=policy.per_minute||old&&(old.status==='ready'||old.status==='pending'&&old.lease_until>a.created_ms))return 0;
     if(state.attempts[a.claim_id])throw Error('Duplicate claim');
     state.attempts[a.claim_id]={...a,status:'reserved',usage_json:null,cost_nano:null};
     const {created_ms,reservation_nano,...entry}=a;

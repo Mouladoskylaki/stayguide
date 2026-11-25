@@ -19,13 +19,13 @@ const id='0123456789abcdef',guide={property_name:'Synthetic property',welcome:'W
  const s=await step(SQL.source,[id,'welcome'],true);
  const a=['one',id,'welcome','en-GB','el-GR',s.source_version,CONFIG.model,CONFIG.promptVersion,100000,100010,CONFIG.reservationNano,'mock'];
  await step(SQL.claim,a);await step(SQL.claim,['duplicate',...a.slice(1)]);
- await step(SQL.claim,['reclaimed',...a.slice(1,8),100011,100100,CONFIG.reservationNano,'mock']);
+ if(await step(SQL.claim,['reclaimed',...a.slice(1,8),100011,100100,CONFIG.reservationNano,'mock'])!==0)throw Error('Expired attempt retried');
  await step(SQL.publish,['one',JSON.stringify({welcome:'Old 112.'}),'generated',100012]);
- await step(SQL.publish,['reclaimed',JSON.stringify({welcome:'Hello 112.'}),'generated',100012]);
+ await step(SQL.publish,['one',JSON.stringify({welcome:'Hello 112.'}),'generated',100005]);
  await step(SQL.cached,[id,'welcome','el-GR',CONFIG.model,CONFIG.promptVersion,'mock'],true);
- await step(SQL.manual,['reclaimed',JSON.stringify({welcome:'Corrected 112.'}),s.source_version,id,'welcome','el-GR',CONFIG.model,CONFIG.promptVersion,'en-GB',JSON.stringify({welcome:'Hello 112.'})]);
+ await step(SQL.manual,['one',JSON.stringify({welcome:'Corrected 112.'}),s.source_version,id,'welcome','el-GR',CONFIG.model,CONFIG.promptVersion,'en-GB',JSON.stringify({welcome:'Hello 112.'})]);
  await step(SQL.cached,[id,'welcome','el-GR',CONFIG.model,CONFIG.promptVersion,'mock'],true);
- const correction=['reclaimed',JSON.stringify({welcome:'Must not overwrite 112.'}),s.source_version,id,'welcome','el-GR',CONFIG.model,CONFIG.promptVersion,'en-GB',JSON.stringify({welcome:'Hello 112.'})];
+ const correction=['one',JSON.stringify({welcome:'Must not overwrite 112.'}),s.source_version,id,'welcome','el-GR',CONFIG.model,CONFIG.promptVersion,'en-GB',JSON.stringify({welcome:'Hello 112.'})];
  if(await step(SQL.manual,correction)!==0)throw Error('Concurrent correction was not rejected');
  const currentText=JSON.stringify({welcome:'Corrected 112.'});
  for(const [index,value] of [[0,'incorrect-identity'],[2,null],[2,s.source_version-1],[3,'wrong-property'],[4,'rules'],[5,'de-DE'],[6,'wrong-model'],[7,'wrong-prompt'],[8,'de-DE']]){
@@ -38,7 +38,7 @@ const id='0123456789abcdef',guide={property_name:'Synthetic property',welcome:'W
  const newer=['new-current',id,'welcome','en-GB','el-GR',changed.source_version,CONFIG.model,CONFIG.promptVersion,100020,100100,CONFIG.reservationNano,'mock'];
  if(await step(SQL.claim,newer)!==1)throw Error('New source claim failed');
  await step(SQL.publish,['new-current',JSON.stringify({welcome:'New translation 112.'}),'generated',100021]);
- if(await step(SQL.manual,['reclaimed',JSON.stringify({welcome:'Stale 112.'}),s.source_version,id,'welcome','el-GR',CONFIG.model,CONFIG.promptVersion,'en-GB',currentText])!==0)throw Error('Stale identity accepted');
+ if(await step(SQL.manual,['one',JSON.stringify({welcome:'Stale 112.'}),s.source_version,id,'welcome','el-GR',CONFIG.model,CONFIG.promptVersion,'en-GB',currentText])!==0)throw Error('Stale identity accepted');
  if(await step(SQL.manual,['new-current',JSON.stringify({welcome:'Stale 112.'}),s.source_version,id,'welcome','el-GR',CONFIG.model,CONFIG.promptVersion,'en-GB',JSON.stringify({welcome:'New translation 112.'})])!==0)throw Error('Stale version accepted');
  await step(SQL.cached,[id,'welcome','el-GR',CONFIG.model,CONFIG.promptVersion,'mock'],true);
  const real=['real-claim',id,'welcome','en-GB','el-GR',changed.source_version,CONFIG.model,CONFIG.promptVersion,100030,100100,CONFIG.reservationNano,'openai'];
@@ -106,6 +106,21 @@ with tempfile.TemporaryDirectory(dir='.local/qa',prefix='sg-p31-phase3a-sql-') a
 
 
 print("PASS: independent SQLite connections, unique claims and cumulative budget")
+
+# The durable ledger, not a translation row or its lease, is the retry boundary.
+for status in ['reserved','failed','completed']:
+ db=sqlite3.connect(':memory:');db.executescript(x['schema'])
+ db.execute('INSERT INTO guides VALUES(?,?,?,?,?)',('g','HASH','{"welcome":"Hello"}','now','now'))
+ write_count(db,x['language'],{'1':'g','2':'welcome','3':'en-GB'})
+ args=['first','g','welcome','en-GB','de-DE',2,'gpt-6-luna','hospitality-v1',1,2,660000,'mock']
+ assert write_count(db,x['claim'],{str(i+1):v for i,v in enumerate(args)})==1
+ db.execute('UPDATE translation_attempts SET status=?',(status,))
+ db.execute('DELETE FROM translations')  # Disposable fixture only; keep the attempt.
+ args[0]='forbidden-replacement';args[8]=3;args[9]=4
+ assert write_count(db,x['claim'],{str(i+1):v for i,v in enumerate(args)})==0
+ assert db.execute('SELECT COUNT(*),SUM(reservation_nano) FROM translation_attempts').fetchone()==(1,660000)
+ db.close()
+print("PASS: durable attempt fence rejects reserved/failed/completed identities without translation rows after expiry")
 
 # Competing edits to the same translation use its old text as a compare-and-swap value.
 with tempfile.TemporaryDirectory(dir='.local/qa',prefix='sg-p31-phase3a-correct-') as d:

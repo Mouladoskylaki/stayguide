@@ -1,5 +1,5 @@
 import {createTranslationStore} from './translation-store.js';
-import {createTranslationService,TRANSLATABLE_SECTIONS,isTranslationLocale} from './translation-service.js';
+import {createTranslationService,TRANSLATABLE_SECTIONS,isGenerationLocale} from './translation-service.js';
 import {createOpenAITranslationProvider} from './openai-translation-provider.js';
 import {qrSvg} from './qr.js';
 import {previewWarning} from '../public/qr-tools.js';
@@ -131,10 +131,9 @@ export async function handleRequest(request,env){
       const service=translations(env);
       if(method==='GET')return json(await service.view(row.id,url.searchParams.get('section'),url.searchParams.get('lang')));
       const body=await translationBody(request);
-      if(!body||Array.isArray(body)||Object.keys(body).some(k=>!['section','sourceLanguage','targetLanguage'].includes(k))||!TRANSLATABLE_SECTIONS[body.section]||!isTranslationLocale(body.sourceLanguage)||!isTranslationLocale(body.targetLanguage))return error('Invalid translation request',400);
-      try{await service.setSourceLanguage(row.id,body.section,body.sourceLanguage);}catch{return error('Invalid language',400);}
-      const result=await service.generate(row.id,body.section,body.targetLanguage,body.sourceLanguage);
-      return json(result,result.status==='translated'||result.status==='original'?200:result.category==='live_disabled'?503:409);
+      if(request.headers.get('Content-Type')?.split(';')[0].trim().toLowerCase()!=='application/json'||!body||typeof body!=='object'||Array.isArray(body)||Object.keys(body).length!==4||Object.keys(body).some(k=>!['section','sourceLanguage','targetLanguage','expectedSourceVersion'].includes(k))||!Object.hasOwn(TRANSLATABLE_SECTIONS,body.section)||!isGenerationLocale(body.sourceLanguage)||!isGenerationLocale(body.targetLanguage)||!Number.isSafeInteger(body.expectedSourceVersion)||body.expectedSourceVersion<1)return error('Invalid translation request',400);
+      const result=await service.generate(row.id,body.section,body.targetLanguage,body.sourceLanguage,body.expectedSourceVersion);
+      return json(result,result.status==='translated'||result.status==='original'?200:result.category==='live_disabled'?503:result.category==='source_not_found'?404:result.category==='translation_timeout_uncertain'?504:result.status==='failed'?502:409);
     }
     m=path.match(/^\/api\/guides\/([a-f0-9]{16})$/);
     if(m&&(method==='GET'||method==='PATCH')){
