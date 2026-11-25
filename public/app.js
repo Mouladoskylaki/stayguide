@@ -236,6 +236,108 @@ let initialFields = {};
 let editorOpener = null;
 let editorSaving = false;
 let editorConflict = false;
+let sectionTranslations=null;
+const translationSections=['welcome','arrival','rules','appliances','parking','local_tips','emergency','contact','additional'];
+// Source writes start only from a clean draft and temporarily disable the fields.
+// FormData omits disabled controls; that must not masquerade as changed text.
+const editorDirty=()=>!!editing&&sectionTranslations?.busy!=='source'&&editing.fields.some(([key])=>editorValues()[key]!==initialFields[key]);
+function translationContext(state){return state===sectionTranslations&&editing?.id===state.section&&editorVersion===state.editor&&loadVersion===state.load&&activeId===state.id&&!storageProblem;}
+function translationPreviewClear(){const node=$('#translation-preview');node.replaceChildren();node.hidden=true;node.removeAttribute('lang');}
+function translationOptions(select,empty){
+  select.replaceChildren();const placeholder=document.createElement('option');placeholder.value='';hostI18n.text(placeholder,empty);select.append(placeholder);
+  for(const [locale,name] of Object.entries(HOST_LANGUAGES)){const option=document.createElement('option');option.value=locale;option.lang=locale;option.textContent=name;select.append(option);}
+}
+function resetSectionTranslations(){
+  sectionTranslations=null;$('#section-translations').open=false;$('#section-translations').hidden=!editing||!translationSections.includes(editing.id);
+  translationPreviewClear();ui('#translation-source-state','');ui('#translation-status','');
+  translationOptions($('#translation-source'),'Choose the source language');translationOptions($('#translation-target'),'Choose a target language');
+  if(editing&&translationSections.includes(editing.id)){
+    const entry=getEntry();sectionTranslations={id:entry.id,token:entry.token,section:editing.id,editor:editorVersion,load:loadVersion,serial:0,metadata:null,busy:'',locked:false,status:'Choose a target language to view saved text.',dirty:false};
+  }
+  updateTranslationControls();
+}
+function updateTranslationControls(){
+  const s=sectionTranslations;if(!s)return;
+  $('#drawer-fields').disabled=editorSaving||s.busy==='source';
+  const dirty=editorSaving?s.dirty:editorDirty();
+  if(dirty&&!s.dirty&&s.busy!=='source'){s.serial++;s.busy='';translationPreviewClear();s.status='Saved status may be outdated. Refresh to review it.';}
+  s.dirty=dirty;
+  const blocked=dirty||editorSaving||editorConflict||s.locked||!s.metadata||!!s.busy;
+  const proposed=$('#translation-source').value;
+  $('#translation-source').disabled=blocked;
+  $('#save-source-language').disabled=blocked||!Object.hasOwn(HOST_LANGUAGES,proposed)||proposed===s.metadata?.sourceLanguage;
+  $('#translation-target').disabled=dirty||editorSaving||editorConflict||s.locked||!s.metadata?.declared||s.busy==='metadata'||s.busy==='source'||proposed!==s.metadata?.sourceLanguage;
+  $('#refresh-translations').disabled=dirty||editorSaving||editorConflict||!!s.busy;
+  $('#drawer-fields').disabled=editorSaving||s.busy==='source';
+  $('#save-editor').disabled=editorSaving||editorConflict||s.busy==='source';
+  ui('#translation-status',dirty||editorSaving?'Save or discard your text changes before using translation settings.':s.status);
+}
+function validSourceMetadata(value,section){return value?.section===section&&Number.isSafeInteger(value.sourceVersion)&&value.sourceVersion>0&&typeof value.declared==='boolean'&&(value.sourceLanguage===null&&!value.declared||typeof value.sourceLanguage==='string'&&/^[a-zA-Z]{2,3}(?:-[a-zA-Z0-9]{2,8})*$/.test(value.sourceLanguage)&&value.declared);}
+function showSourceMetadata(s){
+  translationOptions($('#translation-source'),'Choose the source language');
+  const language=s.metadata.sourceLanguage;
+  if(language&&!Object.hasOwn(HOST_LANGUAGES,language)){
+    const option=document.createElement('option');option.value=language;option.disabled=true;hostI18n.text(option,'Previously declared language ({language})',{language});$('#translation-source').append(option);
+  }
+  $('#translation-source').value=language||'';
+  ui('#translation-source-state',language?'Saved source language: {language}':'Source language not declared.',{language:HOST_LANGUAGES[language]||language});
+}
+async function readSourceMetadata(){
+  const s=sectionTranslations;if(!s||!translationContext(s)||!$('#section-translations').open||editorDirty()||editorSaving||editorConflict||s.busy==='source')return;
+  const serial=++s.serial;s.busy='metadata';s.locked=true;s.metadata=null;s.status='Loading saved translation status…';translationPreviewClear();$('#translation-target').value='';updateTranslationControls();
+  try{
+    const value=await api(`/api/guides/${s.id}/translation-sources/${s.section}`,{headers:{Authorization:`Bearer ${s.token}`},cache:'no-store'});
+    if(!translationContext(s)||serial!==s.serial||!$('#section-translations').open)return;
+    if(!validSourceMetadata(value,s.section))throw Error();
+    s.metadata={...value};s.locked=false;showSourceMetadata(s);s.status=value.declared?'Choose a target language to view saved text.':'Source language not declared.';
+  }catch{if(translationContext(s)&&serial===s.serial){s.status='Saved status could not be loaded. Check your connection, then refresh.';s.locked=true;}}
+  finally{if(translationContext(s)&&serial===s.serial){s.busy='';updateTranslationControls();}}
+}
+async function saveSourceLanguage(){
+  const s=sectionTranslations,language=$('#translation-source').value;
+  if(!s||!translationContext(s)||!$('#section-translations').open||editorDirty()||editorSaving||editorConflict||s.busy||s.locked||!s.metadata||!Object.hasOwn(HOST_LANGUAGES,language)||language===s.metadata.sourceLanguage)return;
+  if(s.metadata.declared&&!confirm(t('Change this section’s source language? Its previous translations will become unavailable. Your original text will stay unchanged.')))return;
+  const expected=s.metadata.sourceVersion,serial=++s.serial,restoreFocus=document.activeElement===$('#save-source-language');s.busy='source';s.status='Saving source language…';translationPreviewClear();$('#translation-target').value='';updateTranslationControls();
+  try{
+    const value=await api(`/api/guides/${s.id}/translation-sources/${s.section}`,{method:'PATCH',headers:{Authorization:`Bearer ${s.token}`},body:JSON.stringify({sourceLanguage:language,expectedSourceVersion:expected})});
+    if(!translationContext(s)||serial!==s.serial)return;
+    if(!validSourceMetadata(value,s.section)||value.sourceLanguage!==language||value.sourceVersion!==expected+1)throw Error();
+    s.metadata={...value};showSourceMetadata(s);s.status='Source language saved.';
+  }catch(error){if(translationContext(s)&&serial===s.serial){s.locked=true;s.status=error.status===409?'This section changed elsewhere. Refresh its saved status before choosing again. Your text is unchanged.':'The source language could not be confirmed. Refresh its saved status before choosing again.';}}
+  finally{if(translationContext(s)&&serial===s.serial){s.busy='';updateTranslationControls();if(restoreFocus&&$('#section-translations').open&&(document.activeElement===$('#save-source-language')||document.activeElement===document.body))$(s.locked?'#refresh-translations':'#translation-source').focus({preventScroll:true});}}
+}
+async function readSavedTranslation(){
+  const s=sectionTranslations,target=$('#translation-target').value;
+  if(!s||!translationContext(s)||!$('#section-translations').open||editorDirty()||editorSaving||editorConflict||s.locked||!s.metadata?.declared||s.busy==='source'||s.busy==='metadata'||!Object.hasOwn(HOST_LANGUAGES,target)||$('#translation-source').value!==s.metadata.sourceLanguage)return;
+  const expected={...s.metadata},serial=++s.serial;s.busy='view';s.status='Loading saved translation status…';translationPreviewClear();updateTranslationControls();
+  try{
+    const result=await api(`/api/guides/${s.id}/translations?section=${encodeURIComponent(s.section)}&lang=${encodeURIComponent(target)}`,{headers:{Authorization:`Bearer ${s.token}`},cache:'no-store'});
+    if(!translationContext(s)||serial!==s.serial)return;
+    // The saved-only GET has no expectation argument. Confirm its source snapshot separately.
+    const metadata=await api(`/api/guides/${s.id}/translation-sources/${s.section}`,{headers:{Authorization:`Bearer ${s.token}`},cache:'no-store'});
+    if(!translationContext(s)||serial!==s.serial)return;
+    if(!validSourceMetadata(metadata,s.section)||metadata.sourceVersion!==expected.sourceVersion||metadata.sourceLanguage!==expected.sourceLanguage){s.locked=true;s.status='Saved status may be outdated. Refresh to review it.';return;}
+    if(result.status==='translated'&&result.providerMode==='openai'){
+      const keys=editing.fields.map(([key])=>key).filter(key=>key!=='property_name');
+      if(result.language!==target||result.correction?.sourceVersion!==expected.sourceVersion||!['manual','generated'].includes(result.origin)||!result.fields||Object.keys(result.fields).sort().join()!==keys.sort().join()||!keys.every(key=>typeof result.fields[key]==='string'))throw Error();
+      const preview=$('#translation-preview');
+      for(const [key,label] of editing.fields){if(key==='property_name')continue;const dt=document.createElement('dt'),dd=document.createElement('dd');hostI18n.text(dt,label);dd.setAttribute('lang',target);dd.textContent=result.fields[key];preview.append(dt);preview.append(dd);}
+      preview.hidden=false;s.status=result.origin==='manual'?'Manually corrected translation available.':'Current saved translation available.';
+    }else if(result.status==='translated'&&result.providerMode==='mock')s.status='Test output is not a saved AI translation.';
+    else if(result.status==='original'&&result.language===expected.sourceLanguage)s.status=target===expected.sourceLanguage?'This is the original language.':'No current saved translation available.';
+    else throw Error();
+  }catch{if(translationContext(s)&&serial===s.serial){translationPreviewClear();s.status='Saved status could not be loaded. Check your connection, then refresh.';}}
+  finally{if(translationContext(s)&&serial===s.serial){s.busy='';updateTranslationControls();}}
+}
+$('#section-translations').addEventListener('toggle',()=>{
+  if($('#section-translations').open)readSourceMetadata();
+  else if(sectionTranslations&&sectionTranslations.busy!=='source'){sectionTranslations.serial++;sectionTranslations.busy='';translationPreviewClear();}
+});
+$('#translation-source').addEventListener('change',()=>{const s=sectionTranslations;if(s&&!s.busy&&!s.locked&&!editorDirty()&&!editorSaving&&!editorConflict){s.serial++;s.status=$('#translation-source').value===s.metadata?.sourceLanguage?'Choose a target language to view saved text.':'Save the selected source language before viewing translations.';$('#translation-target').value='';translationPreviewClear();updateTranslationControls();}});
+$('#translation-target').addEventListener('change',()=>{if(sectionTranslations?.busy==='source')return;if(!$('#translation-target').value&&sectionTranslations){sectionTranslations.serial++;sectionTranslations.busy='';translationPreviewClear();sectionTranslations.status='Choose a target language to view saved text.';updateTranslationControls();}else readSavedTranslation();});
+$('#save-source-language').addEventListener('click',saveSourceLanguage);
+$('#refresh-translations').addEventListener('click',readSourceMetadata);
+$('#drawer-fields').addEventListener('input',updateTranslationControls);
 const isGuideRevision=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);
 function editorValues(){
   const form=new FormData($('#section-form'));
@@ -249,6 +351,7 @@ function setEditorSaving(saving){
   $('#section-form').setAttribute('aria-busy',String(saving));
   ui('#editor-status',saving?'Saving your changes. Please wait.':'');
   if(saving)$('#editor-status').focus({preventScroll:true});
+  updateTranslationControls();
 }
 function openEditor(section,opener){
   if(!current||storageProblem||editing)return;
@@ -259,6 +362,7 @@ function openEditor(section,opener){
   ui('#drawer-description',section.hint);
   $('#drawer-fields').innerHTML=section.fields.map(([key,label,type,hint])=>`<div class="form-field"><label for="edit-${key}">${tr(label)}</label>${type==='textarea'?`<textarea id="edit-${key}" name="${key}" placeholder="${esc(t(hint))}" data-i18n-placeholder="${esc(hint)}" rows="5">${esc(initialFields[key])}</textarea>`:`<input id="edit-${key}" name="${key}" type="text" value="${esc(initialFields[key])}" placeholder="${esc(t(hint))}" data-i18n-placeholder="${esc(hint)}" ${key==='property_name'?'required maxlength="80"':''}>`}</div>`).join('');
   $('#editor-error').hidden=true;hostI18n.text($('#editor-error'),'');
+  resetSectionTranslations();
   setEditorSaving(false);
   const drawer=$('#editor-drawer');drawer.hidden=false;drawer.showModal();
   drawer.querySelector('input,textarea')?.focus();
@@ -268,6 +372,7 @@ function openEditor(section,opener){
 function closeEditor(restoreFocus=false){
   const opener=editorOpener;
   editorVersion++;saveVersion++;editing=null;editorOpener=null;
+  resetSectionTranslations();
   $('#discard-dialog').close();$('#discard-dialog').hidden=true;
   $('#editor-drawer').close();$('#editor-drawer').hidden=true;
   $('#drawer-overlay').hidden=true;
@@ -276,8 +381,7 @@ function closeEditor(restoreFocus=false){
 }
 function requestEditorClose(){
   if(!editing||editorSaving)return;
-  const values=editorValues();
-  if(editing.fields.some(([key])=>values[key]!==initialFields[key])){
+  if(editorDirty()){
     $('#discard-dialog').hidden=false;$('#discard-dialog').showModal();$('#keep-editing').focus();
   }else closeEditor(true);
 }
@@ -294,7 +398,7 @@ function sizeEditor(){
 globalThis.visualViewport?.addEventListener('resize',sizeEditor);
 globalThis.visualViewport?.addEventListener('scroll',sizeEditor);
 $('#section-form').addEventListener('submit',async e=>{
-  e.preventDefault();if(!editing||!current||storageProblem||editorSaving||editorConflict||!isGuideRevision(currentRevision))return;
+  e.preventDefault();if(!editing||!current||storageProblem||editorSaving||editorConflict||sectionTranslations?.busy==='source'||!isGuideRevision(currentRevision))return;
   const patch=editorValues(),sectionId=editing.id;
   if('property_name' in patch&&!patch.property_name.trim()){
     hostI18n.text($('#editor-error'),"Please enter a property name.");

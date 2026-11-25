@@ -13,7 +13,7 @@ const tick=()=>new Promise(resolve=>setImmediate(resolve));
 
 // Run the actual host entrypoint, with only its browser boundary replaced.
 function dashboard(initial={},options={}){
-  const values=new Map(Object.entries(initial)),writes=[],requests=[],alerts=[],prompts=[];
+  const values=new Map(Object.entries(initial)),writes=[],requests=[],alerts=[],prompts=[],confirmations=[];
   class Element {
     constructor(){this.hidden=false;this.disabled=false;this.children=[];this.listeners={};this.attributes={};this.textContent='';this.value='';this.classList={add(){},remove(){},contains:name=>this.className?.split(' ').includes(name),toggle:(name,on)=>{const classes=new Set((this.className||'').split(' ').filter(Boolean));if(on)classes.add(name);else classes.delete(name);this.className=[...classes].join(' ');}};}
     addEventListener(type,fn){this.listeners[type]=fn;}
@@ -39,12 +39,12 @@ function dashboard(initial={},options={}){
   const context=vm.createContext({
     URL,createHostI18n,HOST_LANGUAGES,document:{documentElement:{lang:"en-GB"},querySelectorAll:()=>[...nodes.values()].filter(n=>Object.keys(n.attributes).some(a=>a.startsWith("data-i18n"))),querySelector:element,createElement:()=>new Element(),body:new Element(),addEventListener(){}},
     localStorage,location:{origin:'http://localhost'},navigator:{clipboard:{writeText:options.writeClipboard||(async()=>{})}},
-    confirm:()=>options.confirm!==false,alert:msg=>alerts.push(msg),prompt:msg=>prompts.push(msg),
-    FormData:class {get(key){return options.form?.[key]??'';}},
+    confirm:msg=>{confirmations.push(msg);return options.confirm!==false;},alert:msg=>alerts.push(msg),prompt:msg=>prompts.push(msg),
+    FormData:class {get(key){return element('#drawer-fields').disabled?'':options.form?.[key]??'';}},
     fetch:(path,init)=>new Promise((resolve,reject)=>requests.push({path,init,fail:reject,reply:(body,ok=true,status=ok?200:503)=>resolve({ok,status,json:async()=>body})}))
   });
   vm.runInContext(source,context);
-  return {values,writes,requests,alerts,prompts,element,run:code=>vm.runInContext(code,context),options};
+  return {values,writes,requests,alerts,prompts,confirmations,element,run:code=>vm.runInContext(code,context),options};
 }
 
 for(const [name,raw] of [
@@ -497,4 +497,110 @@ test('host PDF validation errors localize field names and details without exposi
  ];
  for(const message of errors){d.run('const e'+errors.indexOf(message)+'=hostBookError('+JSON.stringify(message)+');ui("#book-error",e'+errors.indexOf(message)+'.key,e'+errors.indexOf(message)+'.values)');assert.match(d.element('#book-error').textContent,/Όνομα καταλύματος/);assert(!d.element('#book-error').textContent.includes('Property name'));}
  d.run('const unknown=hostBookError("SYNTHETIC_PRIVATE_DB_ERROR");ui("#book-error",unknown.key,unknown.values)');assert(!d.element('#book-error').textContent.includes('SYNTHETIC_PRIVATE_DB_ERROR'));
+});
+
+// C1: execute the real host UI with controlled owner-API replies, never a provider.
+const sourceMeta=(language=null,version=1)=>({section:'welcome',sourceLanguage:language,sourceVersion:version,declared:language!==null});
+async function translationEditor(metadata=sourceMeta()){
+ const d=await loaded();d.options.form={property_name:'Alpha',welcome:''};d.element('#editor-grid').children[0].click();
+ assert.equal(d.requests.length,1);d.element('#section-translations').open=true;
+ const load=d.run('readSourceMetadata()');d.requests.at(-1).reply(metadata);await load;return d;
+}
+async function savedView(d,result,metadata=sourceMeta('en-GB',2),target='de-DE'){
+ d.element('#translation-target').value=target;const read=d.run('readSavedTranslation()');d.requests.at(-1).reply(result);await tick();d.requests.at(-1).reply(metadata);await read;
+}
+const savedTranslation=(origin='generated',fields={welcome:'Saved German text.'},version=2)=>({status:'translated',language:'de-DE',providerMode:'openai',origin,fields,correction:{sourceVersion:version}});
+test('C1 disclosure is optional, Wi-Fi ineligible and source is never inferred from UI locale',async()=>{
+ const d=await translationEditor();assert.equal(d.element('#translation-source').value,'');assert.equal(d.element('#translation-target').disabled,true);assert.equal(d.element('#save-source-language').disabled,true);
+ assert.equal(d.element('#translation-status').textContent,'Source language not declared.');
+ const count=d.requests.length;
+ for(const locale of Object.keys(HOST_LANGUAGES)){d.run(`hostI18n.setLocale(${JSON.stringify(locale)});applyHostLanguage()`);assert.equal(d.element('#translation-source').value,'');assert.equal(d.requests.length,count);}
+ d.run('closeEditor();openEditor(FIELDS[1])');assert.equal(d.element('#section-translations').hidden,true);assert.equal(d.requests.length,count);
+ assert.equal(d.run('translationSections.length'),9);
+});
+test('C1 first declaration submits only the exact saved source version and never guide content',async()=>{
+ const d=await translationEditor();const before=d.run('JSON.stringify({current,currentRevision})');d.element('#translation-source').value='el-GR';
+ const save=d.run('saveSourceLanguage()');const req=d.requests.at(-1);assert.equal(req.path,'/api/guides/'+a.id+'/translation-sources/welcome');assert.equal(req.init.method,'PATCH');assert.equal(req.init.headers.Authorization,'Bearer '+a.token);
+ assert.deepEqual(JSON.parse(req.init.body),{sourceLanguage:'el-GR',expectedSourceVersion:1});assert.equal(d.element('#drawer-fields').disabled,true);assert.equal(d.element('#save-editor').disabled,true);
+ const count=d.requests.length;await d.run('saveSourceLanguage()');await d.element('#section-form').listeners.submit({preventDefault(){}});assert.equal(d.requests.length,count);
+ req.reply(sourceMeta('el-GR',2));await save;assert.equal(d.confirmations.length,0);assert.equal(d.element('#translation-status').textContent,'Source language saved.');assert.equal(d.run('JSON.stringify({current,currentRevision})'),before);
+});
+test('C1 same-language action is a no-op; changing a declared language needs explicit confirmation',async()=>{
+ const d=await translationEditor(sourceMeta('en-GB',7));const count=d.requests.length;await d.run('saveSourceLanguage()');assert.equal(d.requests.length,count);assert.equal(d.confirmations.length,0);
+ d.element('#translation-source').value='fr-FR';d.options.confirm=false;await d.run('saveSourceLanguage()');assert.equal(d.requests.length,count);assert.equal(d.confirmations.length,1);
+ assert(d.confirmations[0].includes('previous translations will become unavailable'));
+ d.options.confirm=true;const save=d.run('saveSourceLanguage()');assert.deepEqual(JSON.parse(d.requests.at(-1).init.body),{sourceLanguage:'fr-FR',expectedSourceVersion:7});d.requests.at(-1).reply(sourceMeta('fr-FR',8));await save;
+ assert.equal(d.element('#translation-source').value,'fr-FR');
+});
+test('C1 409 never refreshes and resubmits; a fresh expectation requires an explicit read and choice',async()=>{
+ const d=await translationEditor(sourceMeta('en-GB',2));d.element('#translation-source').value='fr-FR';const work=d.run('saveSourceLanguage()');d.requests.at(-1).reply({error:'PRIVATE SERVER DETAIL'},false,409);await work;
+ assert(d.element('#translation-status').textContent.includes('changed elsewhere'));assert(!d.element('#translation-status').textContent.includes('PRIVATE'));assert.equal(d.element('#translation-source').disabled,true);
+ const count=d.requests.length;await d.run('saveSourceLanguage()');assert.equal(d.requests.length,count);
+ const refresh=d.run('readSourceMetadata()');d.requests.at(-1).reply(sourceMeta('de-DE',3));await refresh;assert.equal(d.requests.length,count+1);assert.equal(d.element('#translation-source').value,'de-DE');
+ d.element('#translation-source').value='fr-FR';const save=d.run('saveSourceLanguage()');assert.equal(JSON.parse(d.requests.at(-1).init.body).expectedSourceVersion,3);d.requests.at(-1).reply(sourceMeta('fr-FR',4));await save;
+});
+test('C1 unsaved drafts and active guide saves block declaration without losing text',async()=>{
+ const d=await translationEditor(sourceMeta('en-GB',2));d.options.form.welcome='Unsaved draft';d.element('#drawer-fields').listeners.input();d.element('#translation-source').value='fr-FR';const count=d.requests.length;await d.run('saveSourceLanguage()');assert.equal(d.requests.length,count);assert.equal(d.element('#translation-source').disabled,true);assert.equal(d.options.form.welcome,'Unsaved draft');
+ d.options.form.welcome='';d.element('#drawer-fields').listeners.input();const saving=d.element('#section-form').listeners.submit({preventDefault(){}});const after=d.requests.length;await d.run('saveSourceLanguage()');assert.equal(d.requests.length,after);d.requests.at(-1).fail(Error('PRIVATE NETWORK DETAIL'));await saving;
+ assert.equal(d.run('editorSaving'),false);assert.equal(d.options.form.welcome,'');
+});
+test('C1 saved/manual previews use plain text and accept only current OpenAI provenance',async()=>{
+ for(const origin of ['generated','manual']){
+  const d=await translationEditor(sourceMeta('en-GB',2));await savedView(d,savedTranslation(origin,{welcome:'<img src=x onerror=alert(1)>'}));assert.equal(d.element('#translation-preview').hidden,false);assert.equal(d.element('#translation-preview').children[1].textContent,'<img src=x onerror=alert(1)>');assert.equal(d.element('#translation-preview').children[1].innerHTML,undefined);
+  assert.equal(d.element('#translation-status').textContent,origin==='manual'?'Manually corrected translation available.':'Current saved translation available.');
+  assert.equal(d.element('#translation-preview').getAttribute('lang'),null);assert.equal(d.element('#translation-preview').children[1].getAttribute('lang'),'de-DE');
+  assert(d.requests.filter(r=>r.path.includes('/translations?')).every(r=>!r.init.method||r.init.method==='GET'));
+ }
+ const d=await translationEditor(sourceMeta('en-GB',2));await savedView(d,{...savedTranslation(),providerMode:'mock'});assert.equal(d.element('#translation-preview').hidden,true);assert.equal(d.element('#translation-status').textContent,'Test output is not a saved AI translation.');
+});
+test('C1 original/missing views make no claims about safe generation or earlier attempts',async()=>{
+ const d=await translationEditor(sourceMeta('en-GB',2));await savedView(d,{status:'original',language:'en-GB',fields:{welcome:'Original'}});assert.equal(d.element('#translation-status').textContent,'No current saved translation available.');assert.equal(d.element('#translation-preview').hidden,true);
+ await savedView(d,{status:'original',language:'en-GB',fields:{welcome:'Original'}},sourceMeta('en-GB',2),'en-GB');assert.equal(d.element('#translation-status').textContent,'This is the original language.');
+});
+test('C1 stale source or cached version cannot be presented as current',async()=>{
+ for(const version of [1,3]){
+  const d=await translationEditor(sourceMeta('en-GB',2));await savedView(d,savedTranslation('generated',undefined,version));assert.equal(d.element('#translation-preview').hidden,true);assert(d.element('#translation-status').textContent.includes('could not be loaded'));
+ }
+ const d=await translationEditor(sourceMeta('en-GB',2));await savedView(d,savedTranslation(),sourceMeta('en-GB',3));assert.equal(d.element('#translation-preview').hidden,true);assert.equal(d.element('#translation-source').disabled,true);assert.equal(d.run('sectionTranslations.metadata.sourceVersion'),2);
+});
+test('C1 network, unauthorized and malformed replies are sanitized and never retried automatically',async()=>{
+ for(const value of [null,{...sourceMeta(),sourceVersion:'1'},{...sourceMeta(),section:'rules'}]){
+  const d=await translationEditor(value);assert.equal(d.element('#translation-source').disabled,true);assert.equal(d.requests.length,2);assert(d.element('#translation-status').textContent.includes('could not be loaded'));
+ }
+ const d=await translationEditor(sourceMeta('en-GB',2));d.element('#translation-source').value='fr-FR';const save=d.run('saveSourceLanguage()');d.requests.at(-1).fail(Error('PRIVATE_TRANSPORT_FAILURE'));await save;assert.equal(d.element('#translation-source').disabled,true);assert(!d.element('#translation-status').textContent.includes('PRIVATE'));assert.equal(d.requests.length,3);
+ const e=await translationEditor(sourceMeta('en-GB',2));e.element('#translation-target').value='de-DE';const read=e.run('readSavedTranslation()');e.requests.at(-1).reply({error:'PRIVATE_AUTH'},false,401);await read;assert.equal(e.element('#translation-preview').hidden,true);assert.equal(e.requests.length,3);
+});
+test('C1 late metadata or source writes cannot repaint another property or a reopened editor',async()=>{
+ for(const kind of ['read','write']){
+  const d=await translationEditor(sourceMeta('en-GB',2));let work;
+  if(kind==='read')work=d.run('readSourceMetadata()');else{d.element('#translation-source').value='fr-FR';work=d.run('saveSourceLanguage()');}
+  const old=d.requests.at(-1);d.element('#property-tabs').children[1].click();d.requests.at(-1).reply(response(b,'Beta'));await tick();old.reply(sourceMeta('fr-FR',3));await work;
+  assert.equal(d.element('#property-heading').textContent,'Beta');assert.equal(d.element('#translation-source-state').textContent,'');assert.equal(d.run('sectionTranslations'),null);
+ }
+ const d=await translationEditor();const old=d.run('readSourceMetadata()'),req=d.requests.at(-1);d.run('closeEditor();openEditor(FIELDS[0])');req.reply(sourceMeta('fr-FR',2));await old;assert.equal(d.element('#translation-source').value,'');
+});
+test('C1 target races, closing disclosure and typing discard obsolete results',async()=>{
+ const d=await translationEditor(sourceMeta('en-GB',2));d.element('#translation-target').value='de-DE';const old=d.run('readSavedTranslation()'),first=d.requests.at(-1);d.element('#translation-target').value='fr-FR';const latest=d.run('readSavedTranslation()');
+ d.requests.at(-1).reply({status:'original',language:'en-GB'});await tick();d.requests.at(-1).reply(sourceMeta('en-GB',2));await latest;first.reply(savedTranslation());await old;assert.equal(d.element('#translation-preview').hidden,true);
+ d.element('#translation-target').value='de-DE';const work=d.run('readSavedTranslation()'),req=d.requests.at(-1);d.options.form.welcome='Draft during fetch';d.element('#drawer-fields').listeners.input();req.reply(savedTranslation());await work;assert.equal(d.element('#translation-preview').hidden,true);assert.equal(d.run('sectionTranslations.busy'),'');assert.equal(d.options.form.welcome,'Draft during fetch');
+ d.options.form.welcome='';d.element('#drawer-fields').listeners.input();assert.equal(d.element('#refresh-translations').disabled,false);
+});
+test('C1 language switching preserves selected content languages, drafts and translated prose',async()=>{
+ const d=await translationEditor(sourceMeta('en-GB',2));await savedView(d,savedTranslation());const count=d.requests.length,text=d.element('#translation-preview').children[1].textContent;
+ for(const locale of Object.keys(HOST_LANGUAGES)){d.run(`hostI18n.setLocale(${JSON.stringify(locale)});applyHostLanguage()`);assert.equal(d.element('#translation-source').value,'en-GB');assert.equal(d.element('#translation-target').value,'de-DE');assert.equal(d.element('#translation-preview').children[1].textContent,text);assert.equal(d.requests.length,count);}
+});
+test('C1 disabled fields during a clean source write do not create a false dirty draft or discard prompt',async()=>{
+ const d=await translationEditor();d.element('#translation-source').value='en-GB';const save=d.run('saveSourceLanguage()'),req=d.requests.at(-1);
+ assert.equal(d.element('#drawer-fields').disabled,true);assert.equal(d.run('editorDirty()'),false);assert.equal(d.options.form.property_name,'Alpha');
+ d.run('requestEditorClose()');assert.equal(d.element('#editor-drawer').open,false);assert.notEqual(d.element('#discard-dialog').open,true);
+ req.reply(sourceMeta('en-GB',2));await save;assert.equal(d.run('sectionTranslations'),null);assert.equal(d.element('#translation-source-state').textContent,'');
+});
+test('C1 all nine section identities use their own owner metadata route; property-name and Wi-Fi fields are never sent',async()=>{
+ const d=await loaded();const sections=JSON.parse(d.run('JSON.stringify(translationSections)'));
+ for(const section of sections){
+  d.run(`closeEditor();openEditor(FIELDS.find(s=>s.id===${JSON.stringify(section)}))`);d.options.form=JSON.parse(d.run('JSON.stringify(initialFields)'));d.element('#section-translations').open=true;
+  const read=d.run('readSourceMetadata()'),request=d.requests.at(-1);assert.equal(request.path,`/api/guides/${a.id}/translation-sources/${section}`);assert.equal(request.init.body,undefined);assert.equal(request.init.headers.Authorization,'Bearer '+a.token);
+  request.reply({...sourceMeta(),section});await read;assert.equal(d.element('#section-translations').hidden,false);assert.equal(d.element('#translation-source').value,'');
+ }
+ assert.equal(sections.length,9);assert(!sections.includes('wifi'));
 });

@@ -44,7 +44,7 @@
       <details class="progress-help"><summary><span data-i18n="How is this counted?">How is this counted?</span></summary><p><span data-i18n="Complete means every field in that section has saved text. Started means only some fields have text; empty means none do. Welcome needs a name and a welcome message. Sections are optional: this counts filled fields, not guest readiness.">Complete means every field in that section has saved text. Started means only some fields have text; empty means none do. Welcome needs a name and a welcome message. Sections are optional: this counts filled fields, not guest readiness.</span></p></details>
     </section>
   </div>
-  <p class="prototype-caution"><span data-i18n="Prototype note: editing access is saved in this browser. Keep this browser&#x27;s data to continue editing. Accounts, 24-hour expiry, content translation controls and billing are not available yet.">Prototype note: editing access is saved in this browser. Keep this browser's data to continue editing. Accounts, 24-hour expiry, content translation controls and billing are not available yet.</span></p>
+  <p class="prototype-caution"><span data-i18n="Prototype note: editing access is saved in this browser. Keep this browser&#x27;s data to continue editing. Accounts, 24-hour expiry, AI translation generation and billing are not available yet.">Prototype note: editing access is saved in this browser. Keep this browser's data to continue editing. Accounts, 24-hour expiry, AI translation generation and billing are not available yet.</span></p>
 </section></main>
 </div>
 <div class="drawer-overlay" id="drawer-overlay" hidden></div>
@@ -58,6 +58,22 @@
     <div class="drawer-scroll">
       <fieldset id="drawer-fields"></fieldset>
       <p class="field-tip"><span data-i18n="Saved changes appear on your existing guest link.">Saved changes appear on your existing guest link.</span></p>
+      <details id="section-translations" class="section-translations" hidden>
+        <summary tabindex="0" data-i18n="Translations">Translations</summary>
+        <div class="translation-controls">
+          <p data-i18n="Optional · saved section text only. Property names and Wi-Fi details are not translated.">Optional · saved section text only. Property names and Wi-Fi details are not translated.</p>
+          <p id="translation-source-state"></p>
+          <label for="translation-source" data-i18n="Language of this section’s text">Language of this section’s text</label>
+          <select id="translation-source" aria-describedby="translation-source-state translation-status"></select>
+          <button type="button" id="save-source-language" class="button button-secondary" data-i18n="Save source language">Save source language</button>
+          <label for="translation-target" data-i18n="View saved translation">View saved translation</label>
+          <select id="translation-target" aria-describedby="translation-status"></select>
+          <p id="translation-status" role="status" aria-live="polite" aria-atomic="true"></p>
+          <dl id="translation-preview" hidden></dl>
+          <button type="button" id="refresh-translations" class="button button-secondary" data-i18n="Refresh saved status">Refresh saved status</button>
+          <p class="translation-unavailable" data-i18n="AI generation and translation editing are not available yet. Creating or retrying a translation is disabled.">AI generation and translation editing are not available yet. Creating or retrying a translation is disabled.</p>
+        </div>
+      </details>
       <p id="editor-error" class="editor-error" role="alert" tabindex="-1" hidden></p>
     </div>
     <footer class="drawer-footer">

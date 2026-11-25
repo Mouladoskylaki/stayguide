@@ -14,6 +14,7 @@ import {checkQrPrint} from './qr-print.browser.mjs';
 import {checkWelcomeBook} from './welcome-book.browser.mjs';
 import {checkHostLocalization} from './host-i18n.browser.mjs';
 import {checkHostWorkspace} from './host-workspace.browser.mjs';
+import {checkHostTranslations} from './host-translations.browser.mjs';
 
 const root=new URL('../public/',import.meta.url);
 const artifacts=process.env.SG_BROWSER_ARTIFACTS?path.resolve(process.env.SG_BROWSER_ARTIFACTS):await fs.mkdtemp(path.join(os.tmpdir(),'sg-p21-browser-'));
@@ -21,10 +22,12 @@ await fs.mkdir(artifacts,{recursive:true});
 console.log('Artifacts: '+artifacts);
 const baselineCss=execFileSync('git',['show','HEAD:public/styles.css'],{cwd:fileURLToPath(new URL('..',import.meta.url))});
 const db=createLocalDb();
+let generationRequests=0;
 const server=http.createServer(async(req,res)=>{
   try{
     const chunks=[];for await(const chunk of req)chunks.push(chunk);
     const request=new Request(origin+req.url,{method:req.method,headers:req.headers,body:chunks.length?Buffer.concat(chunks):undefined});
+    if(req.method==='POST'&&new URL(request.url).pathname.endsWith('/translations'))generationRequests++;
     const response=await handleRequest(request,{DB:db,ASSETS:{async fetch(request){
       let pathname=new URL(request.url).pathname;if(pathname==='/')pathname='/index.html';
       if(pathname==='/baseline-app.html')return new Response(baselineAppHtml,{headers:{'Content-Type':'text/html'}});
@@ -82,7 +85,7 @@ async function evaluate(expression){
 }
 async function waitFor(expression){
   for(let i=0;i<100;i++){if(await evaluate(expression))return;await new Promise(r=>setTimeout(r,30));}
-  const state=await evaluate("JSON.stringify({editorOpen:document.querySelector('#editor-drawer')?.open,errorShown:document.querySelector('#editor-error')?.hidden===false,saveDisabled:document.querySelector('#save-editor')?.disabled,offline:!navigator.onLine})");
+  const state=await evaluate("JSON.stringify({editorOpen:document.querySelector('#editor-drawer')?.open,errorShown:document.querySelector('#editor-error')?.hidden===false,saveDisabled:document.querySelector('#save-editor')?.disabled,offline:!navigator.onLine,translationsOpen:document.querySelector('#section-translations')?.open,translationStatus:document.querySelector('#translation-status')?.textContent,sourceState:document.querySelector('#translation-source-state')?.textContent,focus:document.activeElement?.id})");
   throw Error('Browser state did not settle; state='+state+'; network='+networkFailures.slice(-3).join(',')+'; navigation='+JSON.stringify(navigations.slice(-3)));
 }
 let navigationSequence=0;
@@ -186,7 +189,9 @@ try{
   await command('Page.bringToFront');
   await send('Browser.grantPermissions',{origin,permissions:['clipboardReadWrite','clipboardSanitizedWrite']});
   await send('Browser.setDownloadBehavior',{behavior:'allow',downloadPath:path.join(artifacts,'downloads')});
-  if(process.argv.includes('--localization-only')){
+  if(process.argv.includes('--translations-only')){
+    await checkHostTranslations({db,evaluate,command,navigate,waitFor,screenshot,setDialogAcceptance:value=>{acceptDialog=value;},generationCount:()=>generationRequests});
+  }else if(process.argv.includes('--localization-only')){
     await checkHostLocalization({evaluate,command,navigate,waitFor,screenshot});
   }else{
   console.log('Checking host flows');
@@ -462,6 +467,7 @@ try{
   console.log('PASS: create, switching/stale responses, owner editing, clipboard, QR download, keyboard skip/focus, responsive navigation, reduced motion and recovery.');
   console.log('PASS: marketing desktop/mobile screenshots identical with current vs committed shared CSS; JS-disabled guest rendered.');
   await checkHostLocalization({evaluate,command,navigate,waitFor,screenshot});
+  await checkHostTranslations({db,evaluate,command,navigate,waitFor,screenshot,setDialogAcceptance:value=>{acceptDialog=value;},generationCount:()=>generationRequests});
   console.log('Screenshots: '+artifacts);
   }
 }finally{
