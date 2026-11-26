@@ -10,6 +10,7 @@ import assert from 'node:assert/strict';
 import {handleRequest} from '../src/worker.js';
 import {createLocalDb} from '../node/db.mjs';
 import {checkGuest} from './guest.browser.mjs';
+import {checkGuestLanguages} from './guest-language.browser.mjs';
 import {checkQrPrint} from './qr-print.browser.mjs';
 import {checkWelcomeBook} from './welcome-book.browser.mjs';
 import {checkHostLocalization} from './host-i18n.browser.mjs';
@@ -94,11 +95,11 @@ async function waitFor(expression){
   throw Error('Browser state did not settle; state='+state+'; network='+networkFailures.slice(-3).join(',')+'; navigation='+JSON.stringify(navigations.slice(-3)));
 }
 let navigationSequence=0;
-async function navigate(route){
+async function navigate(route,expectedRoute){
   const target=new URL(route,origin);target.searchParams.set('smoke',++navigationSequence);
-  const url=target.href;
+  const url=expectedRoute?new URL(expectedRoute,origin).href:target.href;
   const documentUrl=new URL(url);documentUrl.hash='';
-  await command('Page.navigate',{url});
+  await command('Page.navigate',{url:target.href});
   // location can change while the previous document still reports complete.
   await waitFor(`location.href===${JSON.stringify(url)} && document.readyState==='complete' && performance.getEntriesByType('navigation')[0]?.name.split('#')[0]===${JSON.stringify(documentUrl.href)}`);
 }
@@ -195,7 +196,9 @@ try{
   await command('Page.bringToFront');
   await send('Browser.grantPermissions',{origin,permissions:['clipboardReadWrite','clipboardSanitizedWrite']});
   await send('Browser.setDownloadBehavior',{behavior:'allow',downloadPath:path.join(artifacts,'downloads')});
-  if(process.argv.includes('--corrections-only')){
+  if(process.argv.includes('--guest-languages-only')){
+    await checkGuestLanguages({db:createLocalDb(),evaluate,command,navigate,waitFor,screenshot,setOfflineGeneration,generationCount:()=>generationRequests});
+  }else if(process.argv.includes('--corrections-only')){
     await checkHostCorrections({db:createLocalDb(),evaluate,command,navigate,waitFor,screenshot,setDialogAcceptance:value=>{acceptDialog=value;},setOfflineGeneration,generationCount:()=>generationRequests,correctionCount:()=>correctionRequests,setCorrectionFault:value=>{correctionFault=value;}});
   }else if(process.argv.includes('--generation-only')){
     await checkHostGeneration({db:createLocalDb(),evaluate,command,navigate,waitFor,screenshot,setDialogAcceptance:value=>{acceptDialog=value;},setOfflineGeneration,generationCount:()=>generationRequests});
@@ -464,6 +467,7 @@ try{
   await command('Emulation.setScriptExecutionDisabled',{value:true});await navigate(guest);
   await screenshot('guest-no-js',390,844);await command('Emulation.setScriptExecutionDisabled',{value:false});
   await checkGuest({origin,db,artifacts,command,evaluate,navigate,screenshot,waitFor});
+  await checkGuestLanguages({db:createLocalDb(),evaluate,command,navigate,waitFor,screenshot,setOfflineGeneration,generationCount:()=>generationRequests});
   await navigate('/app.html');
   await waitFor("document.querySelector('#property-heading').textContent==='Sea View Villa' && document.querySelector('#save-status').textContent==='All changes saved'");
   await evaluate(`localStorage.setItem('stayguide-demo-properties','{broken');window.location.reload()`);

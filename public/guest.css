@@ -108,3 +108,13 @@ body:has(#additional:target) .guest-tile[href="#additional"] { border-color: var
   html { scroll-behavior: smooth; }
   .guest-tile, .copy-btn { transition: background-color .15s, border-color .15s; }
 }
+
+/* Native GET language selection; content is usable with JavaScript disabled. */
+.guest-language { margin-top: 20px; max-width: 440px; }
+.guest-language label { display: block; margin-bottom: 6px; font-size: 13px; font-weight: 650; }
+.guest-language > div { display: flex; flex-wrap: wrap; gap: 8px; }
+.guest-language select { flex: 1 1 150px; min-width: 0; max-width: 100%; min-height: 44px; padding: 10px; border: 1px solid var(--guest-border); border-radius: 10px; background: var(--guest-surface); color: var(--guest-ink); font: inherit; font-size: 16px; }
+.guest-language button { flex: 0 1 auto; min-height: 44px; max-width: 100%; padding: 10px 16px; border: 1px solid var(--guest-border); border-radius: 10px; color: var(--guest-accent-hover); background: var(--guest-tint); white-space: normal; overflow-wrap: anywhere; }
+.guest-language select:focus-visible { outline: 3px solid var(--guest-accent); outline-offset: 3px; }
+.guest-fallback { margin-bottom: 20px; padding: 10px 14px; border: 1px solid var(--guest-border); border-radius: 10px; background: var(--guest-tint); color: var(--guest-ink); font-size: 13px; }
+.guest-section .original-label { margin: -8px 0 12px; color: var(--guest-muted); font-size: 12px; }

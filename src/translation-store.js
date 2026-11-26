@@ -2,6 +2,10 @@
 import {directWriteSucceeded} from './db-write.js';
 export const TRANSLATION_SQL=Object.freeze({
  source:`SELECT * FROM translation_sources WHERE guide_id=?1 AND section=?2`,
+ snapshot:`SELECT g.id AS guide_id,g.content_json,s.section,s.source_language,s.source_version,s.source_text,t.target_language,t.source_version AS translated_source_version,t.model,t.prompt_version,t.provider_mode,t.status,t.origin,t.claim_id,t.translated_text
+ FROM guides g LEFT JOIN translation_sources s ON s.guide_id=g.id
+ LEFT JOIN translations t ON t.guide_id=s.guide_id AND t.section=s.section AND t.source_language=s.source_language AND t.source_version=s.source_version AND t.target_language=?2 AND t.model=?3 AND t.prompt_version=?4 AND t.provider_mode='openai' AND t.status='ready'
+ WHERE g.id=?1 ORDER BY s.section`,
  language:`UPDATE translation_sources SET source_language=?3,source_version=source_version+1 WHERE guide_id=?1 AND section=?2 AND source_language IS NOT ?3 RETURNING 1 AS applied`,
  declare:`UPDATE translation_sources SET source_language=?3,source_version=source_version+CASE WHEN source_language IS ?3 THEN 0 ELSE 1 END WHERE guide_id=?1 AND section=?2 AND source_version=?4 AND (source_language IS ?3 OR source_version<9007199254740991) RETURNING 1 AS applied, section, source_language, source_version`,
  attempted:`SELECT * FROM translation_attempts WHERE guide_id=?1 AND section=?2 AND source_language=?3 AND target_language=?4 AND source_version=?5 AND model=?6 AND prompt_version=?7 AND provider_mode=?8`,
@@ -24,6 +28,7 @@ export function createTranslationStore(db){
  const first=(name,args)=>db.prepare(TRANSLATION_SQL[name]).bind(...args).first();
  const write=async(name,args)=>directWriteSucceeded(await db.prepare(TRANSLATION_SQL[name]).bind(...args).all());
  return {
+  async snapshot(id,target,model,prompt){const result=await db.prepare(TRANSLATION_SQL.snapshot).bind(id,target,model,prompt).all();if(result?.success!==true||!Array.isArray(result.results))throw Error('Saved snapshot unavailable');return result.results;},
   source:(id,section)=>first('source',[id,section]),
   setLanguage:(id,section,language)=>write('language',[id,section,language]),
   async declareLanguage(id,section,language,version){

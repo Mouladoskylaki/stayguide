@@ -7,11 +7,11 @@ document.addEventListener('click', async event => {
   const status = document.getElementById('wifi-copy-status');
   if (!password || !status) return;
   button.disabled = true;
-  status.textContent = 'Copying password…';
+  status.textContent = button.dataset.copying;
   try {
     await navigator.clipboard.writeText(password.textContent);
-    button.textContent = 'Copied ✓';
-    status.textContent = 'Wi-Fi password copied.';
+    button.textContent = button.dataset.copiedButton;
+    status.textContent = button.dataset.copiedStatus;
   } catch {
     password.focus();
     const range = document.createRange();
@@ -19,8 +19,8 @@ document.addEventListener('click', async event => {
     const selection = window.getSelection();
     selection?.removeAllRanges();
     selection?.addRange(range);
-    button.textContent = 'Copy password';
-    status.textContent = 'Couldn’t copy automatically. Select the password above and copy it manually.';
+    button.textContent = button.dataset.copyLabel;
+    status.textContent = button.dataset.copyError;
   } finally {
     button.disabled = false;
   }

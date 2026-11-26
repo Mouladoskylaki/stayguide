@@ -1,3 +1,5 @@
+import {readSavedGuide} from './saved-guide.js';
+import {GUEST_CATALOGS,GUEST_LANGUAGES,guestSelection} from './guest-i18n.js';
 import {createTranslationStore} from './translation-store.js';
 import {createTranslationService,TRANSLATABLE_SECTIONS,TRANSLATION_CONFIG,isGenerationLocale} from './translation-service.js';
 import {createOpenAITranslationProvider} from './openai-translation-provider.js';
@@ -10,7 +12,7 @@ const KEYS = ['property_name','welcome','wifi_name','wifi_password','checkin','c
 const LIMITS = { property_name:80, wifi_name:100, wifi_password:150, welcome:1500, checkin:800, checkout:800, rules:2000, appliances:2000, parking:1000, local_tips:2000, emergency:1000, contact:1000, additional:2000 };
 const DEFAULTS = Object.fromEntries(KEYS.map(k=>[k,'']));
 const esc = v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const paragraph = (v,language)=>{const text=esc(v).replace(/\r?\n/g,'<br>');return language?`<span lang="${esc(language)}">${text}</span>`:text;};
+const paragraph = (v,language)=>{const text=esc(v).replace(/\r?\n/g,'<br>');return language!==undefined?`<span lang="${esc(language)}">${text}</span>`:text;};
 const random = count=>{let b=new Uint8Array(count);crypto.getRandomValues(b);return [...b].map(x=>x.toString(16).padStart(2,'0')).join('');};
 async function hash(value){const a=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value));return [...new Uint8Array(a)].map(v=>v.toString(16).padStart(2,'0')).join('');}
 function json(data,status=200,headers={}){return new Response(JSON.stringify(data),{status,headers:{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff',...headers}});}
@@ -46,35 +48,38 @@ const GUEST_ICONS = {
 };
 const guestIcon=id=>`<svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true" focusable="false">${GUEST_ICONS[id]}</svg>`;
 const hasText=value=>typeof value==='string'&&value.trim().length>0;
-function guestPage(id,model){
+function guestPage(id,model,{locale='en-GB',target=null,languages={},fallback=[]}={}){
+  const c=GUEST_CATALOGS[locale],label=k=>esc(c[k]),content=(value,key)=>paragraph(value,languages[key]||'');
   const title=esc(model.property_name),sections=[];
-  const add=(id,title,body)=>sections.push({id,title,body});
+  const add=(id,title,body)=>sections.push({id,title:c[id]||title,body});
   if(hasText(model.wifi_name)||hasText(model.wifi_password)){
     add('wifi','Wi-Fi',`<dl class="wifi-data">
-      ${hasText(model.wifi_name)?`<div><dt>Network</dt><dd>${esc(model.wifi_name)}</dd></div>`:''}
-      ${hasText(model.wifi_password)?`<div><dt>Password</dt><dd><code id="wifi-password" tabindex="0">${esc(model.wifi_password)}</code></dd></div>`:''}
-    </dl>${hasText(model.wifi_password)?`<div class="wifi-copy"><button type="button" class="copy-btn" data-copy="wifi-password" aria-describedby="wifi-copy-status" hidden>Copy password</button><p id="wifi-copy-status" class="copy-status" role="status" aria-live="polite"></p></div>`:''}`);
+      ${hasText(model.wifi_name)?`<div><dt>${label('network')}</dt><dd lang="">${esc(model.wifi_name)}</dd></div>`:''}
+      ${hasText(model.wifi_password)?`<div><dt>${label('password')}</dt><dd lang=""><code id="wifi-password" tabindex="0">${esc(model.wifi_password)}</code></dd></div>`:''}
+    </dl>${hasText(model.wifi_password)?`<div class="wifi-copy"><button type="button" class="copy-btn" data-copy="wifi-password" data-copying="${label('copying')}" data-copy-label="${label('copy')}" data-copied-button="${label('copiedButton')}" data-copied-status="${label('copiedStatus')}" data-copy-error="${label('copyError')}" aria-describedby="wifi-copy-status" hidden>${label('copy')}</button><p id="wifi-copy-status" class="copy-status" role="status" aria-live="polite"></p></div>`:''}`);
   }
   if(hasText(model.checkin)||hasText(model.checkout)){
     add('arrival','Check-in & check-out',`<div class="hours-grid">
-      ${hasText(model.checkin)?`<div><h3>Check-in</h3><p>${paragraph(model.checkin,model.__translationLanguages?.checkin)}</p></div>`:''}
-      ${hasText(model.checkout)?`<div><h3>Check-out</h3><p>${paragraph(model.checkout,model.__translationLanguages?.checkout)}</p></div>`:''}
+      ${hasText(model.checkin)?`<div><h3>${label('checkin')}</h3><p>${content(model.checkin,'checkin')}</p></div>`:''}
+      ${hasText(model.checkout)?`<div><h3>${label('checkout')}</h3><p>${content(model.checkout,'checkout')}</p></div>`:''}
     </div>`);
   }
-  if(hasText(model.welcome))add('welcome','Welcome',`<p>${paragraph(model.welcome,model.__translationLanguages?.welcome)}</p>`);
+  if(hasText(model.welcome))add('welcome','Welcome',`<p>${content(model.welcome,'welcome')}</p>`);
   for(const [key,label] of [['rules','House rules'],['appliances','How things work'],['parking','Parking & transport'],['local_tips','Local favourites'],['emergency','Emergency information'],['contact','Contact your host'],['additional','Good to know']]){
-    if(hasText(model[key]))add(key,label,`<p>${paragraph(model[key],model.__translationLanguages?.[key])}</p>`);
+    if(hasText(model[key]))add(key,label,`<p>${content(model[key],key)}</p>`);
   }
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><meta name="theme-color" content="#f8f7f4"><title>${title} · StayGuide</title><link rel="stylesheet" href="/guest.css"></head>
+  return `<!doctype html><html lang="${locale}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><meta name="theme-color" content="#f8f7f4"><title>${title} · StayGuide</title><link rel="stylesheet" href="/guest.css"></head>
 <body class="guest-body"><main class="guest-shell" id="guide-top">
-  <header class="guest-head"><span class="guest-eyebrow">A LITTLE GUIDE TO YOUR STAY</span><h1>${title}</h1><p>Settle in. Make yourself at home.</p></header>
+  <header class="guest-head"><span class="guest-eyebrow">${label('eyebrow')}</span><h1 lang="">${title}</h1><p>${label('intro')}</p>
+  <form class="guest-language" action="/g/${id}" method="get"><label for="guest-language">${label('language')}</label><div><select id="guest-language" name="lang"><option value=""${!target?' selected':''}>${label('original')}</option>${Object.entries(GUEST_LANGUAGES).map(([tag,name])=>`<option value="${tag}" lang="${tag}"${target===tag?' selected':''}>${esc(name)}</option>`).join('')}</select><button type="submit">${label('show')}</button></div></form></header>
+  ${fallback.length?`<p class="guest-fallback" role="status">${label('fallbackNotice')}</p>`:''}
   ${sections.length?`<div class="guest-layout">
-    <nav class="quick-nav" aria-labelledby="guide-nav-title"><h2 id="guide-nav-title">Your stay, at a glance</h2><div class="guest-tiles">
+    <nav class="quick-nav" aria-labelledby="guide-nav-title"><h2 id="guide-nav-title">${label('navigation')}</h2><div class="guest-tiles">
       ${sections.map(({id,title})=>`<a class="guest-tile${id==='wifi'?' guest-tile-wifi':''}" href="#${id}">${guestIcon(id)}<span>${title}</span></a>`).join('')}
     </div></nav>
-    <div class="guest-content">${sections.map(({id,title,body})=>`<section class="guest-section" id="${id}" aria-labelledby="${id}-title" tabindex="-1"><header class="guest-section-head"><span class="section-icon">${guestIcon(id)}</span><h2 id="${id}-title">${title}</h2></header>${body}<a class="back-to-guide" href="#guide-top">Back to sections <span aria-hidden="true">↑</span></a></section>`).join('')}</div>
-  </div>`:`<section class="empty-guide" aria-labelledby="empty-guide-title"><span class="section-icon">${guestIcon('welcome')}</span><h2 id="empty-guide-title">A warm welcome awaits.</h2><p>Your host is preparing this guide. Check back for the details of your stay.</p></section>`}
-  <footer class="guest-foot">Enjoy your stay.</footer>
+    <div class="guest-content">${sections.map(({id,title,body})=>`<section class="guest-section" id="${id}" aria-labelledby="${id}-title" tabindex="-1"><header class="guest-section-head"><span class="section-icon">${guestIcon(id)}</span><h2 id="${id}-title">${title}</h2></header>${fallback.includes(id)?`<p class="original-label">${label('originalLabel')}</p>`:''}${body}<a class="back-to-guide" href="#guide-top">${label('back')} <span aria-hidden="true">↑</span></a></section>`).join('')}</div>
+  </div>`:`<section class="empty-guide" aria-labelledby="empty-guide-title"><span class="section-icon">${guestIcon('welcome')}</span><h2 id="empty-guide-title">${label('emptyTitle')}</h2><p>${label('emptyBody')}</p></section>`}
+  <footer class="guest-foot">${label('footer')}</footer>
 </main><script src="/guest.js" defer></script></body></html>`;
 }
 function qrCard(id,model,target){
@@ -191,20 +196,21 @@ export async function handleRequest(request,env){
     }
     m=path.match(/^\/g\/([a-f0-9]{16})(?:\/(qr\.svg|card))?$/);
     if(m&&method==='GET'){
-      const row=await lookup(env.DB,m[1]);if(!row)return html('<h1>Guide not found</h1>',404);
-      const model=parseRow(row),target=new URL(`/g/${m[1]}`,url.origin).href;
-      if(m[2]==='qr.svg')return new Response(qrSvg(target),{headers:{'Content-Type':'image/svg+xml; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','X-Robots-Tag':'noindex'}});
-      if(m[2]==='card')return html(qrCard(m[1],model,target));
-      const targetLanguage=url.searchParams.get('lang');
-      if(targetLanguage){
-        const service=translations(env);
-        for(const section of Object.keys(TRANSLATABLE_SECTIONS)){
-          const saved=await service.view(m[1],section,targetLanguage);
-          if(saved.status==='translated'&&saved.providerMode==='openai')Object.assign(model,saved.fields);
-          if(saved.language&&(saved.status==='original'||saved.status==='translated'&&saved.providerMode==='openai')){model.__translationLanguages??={};for(const key of Object.keys(saved.fields))model.__translationLanguages[key]=saved.language;}
-        }
+      const target=new URL(`/g/${m[1]}`,url.origin).href;
+      if(m[2]){const row=await lookup(env.DB,m[1]);if(!row)return html('<h1>Guide not found</h1>',404);const model=parseRow(row);
+        if(m[2]==='qr.svg')return new Response(qrSvg(target),{headers:{'Content-Type':'image/svg+xml; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','X-Robots-Tag':'noindex'}});
+        return html(qrCard(m[1],model,target));
       }
-      return html(guestPage(m[1],model));
+      const selection=guestSelection(url);
+      if(selection.redirect)return new Response(null,{status:303,headers:{Location:`/g/${m[1]}`,'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','X-Robots-Tag':'noindex, nofollow'}});
+      let saved;
+      try{saved=await readSavedGuide(env.DB,m[1],selection.target);}
+      catch{
+        // A failed translation read cannot remove an otherwise readable guide.
+        const row=await lookup(env.DB,m[1]);if(!row)return html('<h1>Guide not found</h1>',404);
+        const model=parseRow(row);saved={model,languages:{},fallback:selection.target?Object.entries(TRANSLATABLE_SECTIONS).filter(([,keys])=>keys.some(k=>hasText(model[k]))).map(([key])=>key):[]};
+      }
+      return html(guestPage(m[1],saved.model,{...selection,...saved}));
     }
     if(method==='GET'&&env.ASSETS)return env.ASSETS.fetch(request);
     return new Response('Not found',{status:404});

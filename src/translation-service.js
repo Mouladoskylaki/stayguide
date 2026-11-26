@@ -19,19 +19,19 @@ export function createMockTranslationProvider(){
   return {fields:{...payload.fields},usage:{inputTokens:bytes(JSON.stringify(payload)),outputTokens:bytes(JSON.stringify(payload.fields)),reasoningTokens:0}};
  }});
 }
-export function createTranslationService({store,provider=createMockTranslationProvider(),now=Date.now}){
- if(!['mock','openai'].includes(provider?.mode)||typeof provider.translate!=='function')throw Error('Only mock providers are enabled');
- const config=TRANSLATION_CONFIG;
- const fieldsFrom=source=>{
+export const fieldsFrom=source=>{
   const raw=JSON.parse(source.source_text),keys=TRANSLATABLE_SECTIONS[source.section];
   if(!keys)throw Error('Invalid section');
   const fields=Object.fromEntries(keys.map(key=>[key,raw[key]??'']));
   if(!Object.values(fields).every(safeText))throw Error('Unsafe content');return fields;
  };
- const validateFields=(fields,original)=>{
+export const validateFields=(fields,original)=>{
   if(!fields||Array.isArray(fields)||Object.keys(fields).sort().join()!==Object.keys(original).sort().join())return false;
   return Object.entries(original).every(([key,text])=>safeText(fields[key])&&(fields[key].trim().length>0)===(text.trim().length>0)&&bytes(fields[key])<=3200&&protectedValues(text).every(value=>fields[key].includes(value)));
  };
+export function createTranslationService({store,provider=createMockTranslationProvider(),now=Date.now}){
+ if(!['mock','openai'].includes(provider?.mode)||typeof provider.translate!=='function')throw Error('Only mock providers are enabled');
+ const config=TRANSLATION_CONFIG;
  const fallback=async(id,section,target)=>{
   const source=await store.source(id,section);if(!source)return {status:'missing',fields:{},language:null};
   const original=fieldsFrom(source);

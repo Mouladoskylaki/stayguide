@@ -1,6 +1,6 @@
 # Architecture — provisional
 
-## Current prototype — checkpoint 46ea431
+## Current prototype — committed baseline a87741f, pending W6 review
 - `public/index.html`, `public/app.html`, `public/app.js`, `public/styles.css`: static host/marketing UI.
 - `src/worker.js`: Cloudflare Worker routes/API and SSR guest HTML.
 - `src/qr.js`: local QR SVG generator.
@@ -14,7 +14,8 @@ Cloudflare Workers + static assets + D1; R2 only if images justify it. SSR publi
 ## Routes (audit against code)
 - `POST /api/guides` create; `GET/PATCH /api/guides/:id` authenticated by temporary edit token.
 - `GET /g/:id` public guide (optional saved-only `?lang=` projection); `/g/:id/qr.svg` QR; `/g/:id/card` printable HTML.
-- `POST/GET /api/guides/:id/translations`: existing owner-token checks before generation/read; no correction-editing HTTP operation or complete language UI yet. Guest views never trigger paid generation in v1.
+- `GET/POST/PATCH /api/guides/:id/translations`: owner-token checks precede saved reads, explicit version-aware generation and snapshot-CAS correction. Source GET/PATCH and read-only capability routes support the host controls. Real generation remains disabled.
+- Pending W6: `/g/:id` has a native GET language form, six small server-only guest catalogs and a storage-only saved projection. It never constructs the provider boundary. Original selection/invalid or repeated lang parameters normalize to the query-free canonical URL. Known-source and translated text receive language tags; unknown source remains unspecified.
 
 ## Hard boundaries
 Temporary edit token in localStorage is NOT production authentication. Public URL does not imply private data protection. Do not publish without proper accounts/sessions, ownership, rate limiting, trial expiry, upload validation, backups, privacy, billing verification, monitoring and deployment review.
@@ -47,4 +48,11 @@ OpenAI gpt-6-luna Standard Global is selected for v1. Additive D1 migrations/sou
 
 The [acceptance matrix](LAUNCH_ACCEPTANCE_MATRIX.md) proposes measurable criteria for the owner-selected Greek, English, German, French, Italian and Spanish milestone without changing runtime locale allowlists, APIs or storage. Future languages remain possible. Host interface locale, section source, guest target and print language must stay separate; no source-language assumption for legacy guides. No paid generation from guest views in v1. Full public launch retains all approved media/printable and commercial/security capabilities.
 
-Production gaps identified in SG-PAR-01 remain open: original guide PATCH has no source-version conflict condition (`src/worker.js`), whereas manual translation correction has CAS protection; fixture policy is eight lifetime attempts/$0.10 shared across the DB, not a production allocation; selected guest languages can require sequential per-section DB lookups; eligible prose may contain private data; valid saved fields may exceed translation bounds. No fix, queue/cache architecture, quota reset or public enablement is approved here. D1/runtime/restore/load verification, source conflict/API policy, account/trial/privacy/commercial design and media storage still require scoped decisions and evidence.
+Historical SG-PAR-01 gaps were subsequently addressed by W1 atomic guide-save revision checks and W2 actual local D1 verification/write-result compatibility. Production/distributed D1 remains unverified. Remaining gaps include fixture policy of eight lifetime attempts/$0.10 shared across the DB, not a production allocation; the historical sequential per-section guest lookup is replaced in pending W6 by a joined read and final snapshot recheck; eligible prose may contain private data; valid saved fields may exceed translation bounds. No fix, queue/cache architecture, quota reset or public enablement is approved here. D1/runtime/restore/load verification, source conflict/API policy, account/trial/privacy/commercial design and media storage still require scoped decisions and evidence.
+
+
+## W6 saved-only guest projection — pending independent review
+
+`src/saved-guide.js` reads existing guide/source/current-ready OpenAI records through `translation-store.snapshot`. The single SELECT joins a coherent SQLite/D1 statement snapshot; a second read checks guide JSON/revision, sources and current translation text/identity before the overlay is used. Any observed change discards the overlay and projects the latest original snapshot. A failed translation read falls back to a fresh ordinary guide read. No lease, attempt, reservation, source declaration, correction or guide write is made. The local adapter adds only the matching read operation. Shared field/protected-string validation remains in `translation-service.js`; provider construction and generation are absent from this reader.
+
+Stable original/target requests perform two SELECTs instead of the old code-derived maximum of approximately nineteen. Joined rows repeat guide JSON; local query counts/timings and payload measurements are evidence, not production performance certification. No cache, queue, schema, migration, dependency or new public API is introduced. Read-only projection is kept separate from HTML so W7 can later reuse the content rules under separate authorization; translated PDF handling is not implemented here. Post-final-read changes and distributed replica freshness cannot be ruled out without production verification. See [W6 verification](TESTING.md#sg-p31-w6--saved-only-guest-language-selection).

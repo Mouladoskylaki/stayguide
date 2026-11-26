@@ -23,7 +23,7 @@ test('guest SSR contains all ten saved sections and matching ordinary anchors',a
     assert.ok(page.includes(`aria-labelledby="${id}-title"`));
   }
   assert.equal((page.match(/<a class="guest-tile/g)||[]).length,10);
-  assert.equal((page.match(/<h1>/g)||[]).length,1);
+  assert.equal((page.match(/<h1\b/g)||[]).length,1);
   assert.match(page,/<h3>Check-in<\/h3>/);assert.match(page,/<h3>Check-out<\/h3>/);
   assert.ok(page.indexOf('id="wifi"')<page.indexOf('id="welcome"'));
   assert.match(page,/href="\/guest.css"/);assert.ok(!page.includes('/styles.css'));
@@ -94,7 +94,7 @@ test('stable guest URLs, exact QR destination and existing print card are preser
 function copyHarness(writeText){
   let click,selected=false;
   const password={textContent:'Synthetic WiFi value',focus(){this.focused=true;}};
-  const button={hidden:true,dataset:{copy:'wifi-password'},disabled:false,textContent:'Copy password'};
+  const button={hidden:true,dataset:{copy:'wifi-password',copying:'Copying password…',copiedButton:'Copied ✓',copiedStatus:'Wi-Fi password copied.',copyLabel:'Copy password',copyError:'Couldn’t copy automatically. Select the password above and copy it manually.'},disabled:false,textContent:'Copy password'};
   const status={textContent:''};
   const context={document:{querySelectorAll:()=>[button],addEventListener:(name,fn)=>{click=fn;},getElementById:id=>id==='wifi-password'?password:status,createRange:()=>({selectNodeContents(node){selected=node===password;}})},navigator:{clipboard:writeText?{writeText}:undefined},window:{getSelection:()=>({removeAllRanges(){},addRange(){}})}};
   vm.runInNewContext(fs.readFileSync(new URL('../public/guest.js',import.meta.url),'utf8'),context);

@@ -41,6 +41,14 @@ export function createLocalDb(file=null){
   const operation=Object.keys(TRANSLATION_SQL).find(k=>TRANSLATION_SQL[k]===sql);
   if(operation){
    const [id,section]=p,s=state.sources[sourceKey(id,section)];
+   if(operation==='snapshot'){
+    const guide=state.guides[id];if(!guide)return [];
+    const sources=Object.values(state.sources).filter(s=>s.guide_id===id).sort((a,b)=>a.section.localeCompare(b.section));
+    return clone((sources.length?sources:[null]).map(source=>{
+     const t=source?Object.values(state.translations).find(t=>t.guide_id===id&&t.section===source.section&&t.source_language===source.source_language&&t.source_version===source.source_version&&t.target_language===p[1]&&t.model===p[2]&&t.prompt_version===p[3]&&t.provider_mode==='openai'&&t.status==='ready'):null;
+     return {guide_id:id,content_json:guide.content_json,section:source?.section??null,source_language:source?.source_language??null,source_version:source?.source_version??null,source_text:source?.source_text??null,target_language:t?.target_language??null,translated_source_version:t?.source_version??null,model:t?.model??null,prompt_version:t?.prompt_version??null,provider_mode:t?.provider_mode??null,status:t?.status??null,origin:t?.origin??null,claim_id:t?.claim_id??null,translated_text:t?.translated_text??null};
+    }));
+   }
    if(operation==='source')return clone(s??null);
    if(operation==='attempted')return clone(Object.values(state.attempts).find(a=>entryKey(a)===entryKey({guide_id:id,section,source_language:p[2],target_language:p[3],source_version:p[4],model:p[5],prompt_version:p[6],provider_mode:p[7]}))??null);
    if(operation==='cached')return clone(Object.values(state.translations).find(t=>t.guide_id===id&&t.section===section&&t.target_language===p[2]&&t.model===p[3]&&t.prompt_version===p[4]&&t.provider_mode===p[5]&&t.status==='ready'&&current(t))??null);
@@ -101,7 +109,7 @@ export function createLocalDb(file=null){
   return {
   bind(...values){params=values;return this;},
   async first(){if(returning)return (await write()).results[0]??null;load();return execute(sql,params,true);},
-  async all(){if(!returning)throw Error('Unsupported local result query');return write();},
+  async all(){if(sql===TRANSLATION_SQL.snapshot){load();return {success:true,results:execute(sql,params,true),meta:{}};}if(!returning)throw Error('Unsupported local result query');return write();},
   run:write
  };}};
 }
