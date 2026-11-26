@@ -19,7 +19,7 @@ function dashboard(initial={},options={}){
   class Element {
     constructor(){this.hidden=false;this.disabled=false;this.children=[];this.listeners={};this.attributes={};this.textContent='';this.value='';this.classList={add(){},remove(){},contains:name=>this.className?.split(' ').includes(name),toggle:(name,on)=>{const classes=new Set((this.className||'').split(' ').filter(Boolean));if(on)classes.add(name);else classes.delete(name);this.className=[...classes].join(' ');}};}
     addEventListener(type,fn){this.listeners[type]=fn;}
-    append(child){this.children.push(child);}
+    append(child){this.children.push(child);if(child.id)nodes.set('#'+child.id,child);}
     replaceChildren(){this.children=[];}
     querySelector(){return element('#input');}
     querySelectorAll(){return this.children;}
@@ -519,7 +519,7 @@ async function translationEditor(metadata=sourceMeta()){
 async function savedView(d,result,metadata=sourceMeta('en-GB',2),target='de-DE'){
  d.element('#translation-target').value=target;const read=d.run('readSavedTranslation()');d.requests.at(-1).reply(result);await tick();d.requests.at(-1).reply(metadata);await read;
 }
-const savedTranslation=(origin='generated',fields={welcome:'Saved German text.'},version=2)=>({status:'translated',language:'de-DE',providerMode:'openai',origin,fields,correction:{sourceVersion:version}});
+const savedTranslation=(origin='generated',fields={welcome:'Saved German text.'},version=2)=>({status:'translated',language:'de-DE',providerMode:'openai',origin,fields,correction:{sourceVersion:version,translationId:'synthetic-viewed-translation',translatedText:JSON.stringify(fields)}});
 test('C1 disclosure is optional, Wi-Fi ineligible and source is never inferred from UI locale',async()=>{
  const d=await translationEditor();assert.equal(d.element('#translation-source').value,'');assert.equal(d.element('#translation-target').disabled,true);assert.equal(d.element('#save-source-language').disabled,true);
  assert.equal(d.element('#translation-status').textContent,'Source language not declared.');
@@ -679,4 +679,41 @@ test('C2 actual host UI -> authenticated Worker -> fake provider -> storage -> s
  await Promise.all([d.run('generateSectionTranslation()'),d.run('generateSectionTranslation()')]);assert.equal(calls,1);assert.equal(keys,0);assert.equal(d.element('#translation-generation-status').textContent,'Test translation saved and verified.');assert.equal(d.element('#translation-preview').children[1].textContent,'Synthetic German. 112.');
  await d.run('readSourceMetadata()');assert.equal(d.element('#translation-target').value,'de-DE');assert.equal(calls,1);await d.run('generateSectionTranslation()');assert.equal(calls,1);
  assert.equal(d.requests.filter(r=>r.init?.method==='POST'&&r.path.endsWith('/translations')).length,1);
+});
+
+async function correctionEditor(){const d=await translationEditor(sourceMeta('en-GB',2));await savedView(d,savedTranslation());d.run('beginTranslationCorrection()');assert.equal(d.element('#translation-correction').hidden,false);return d;}
+test('C3 inline editing is available with generation off and preserves exact viewed snapshot',async()=>{
+ const d=await correctionEditor();assert.equal(d.element('#generate-translation').hidden,true);assert.equal(d.element('#correct-welcome').value,'Saved German text.');assert.equal(d.element('#drawer-fields').disabled,true);assert.equal(d.element('#save-editor').disabled,true);
+ d.element('#correct-welcome').value='Corrected German.\n\n112.';const n=d.requests.length,work=d.run('saveTranslationCorrection()'),post=d.requests.at(-1);assert.equal(d.requests.length,n+1);assert.equal(post.init.method,'PATCH');assert.deepEqual(JSON.parse(post.init.body),{section:'welcome',targetLanguage:'de-DE',fields:{welcome:'Corrected German.\n\n112.'},expected:savedTranslation().correction});assert.equal(d.run('editorDirty()'),false);
+ await d.run('saveTranslationCorrection()');assert.equal(d.requests.length,n+1);post.reply({status:'corrected'});await tick();d.requests.at(-1).reply(savedTranslation('manual',{welcome:'Corrected German.\n\n112.'}));await tick();d.requests.at(-1).reply(sourceMeta('en-GB',2));await work;assert.equal(d.element('#translation-correction').hidden,true);assert.equal(d.element('#correct-welcome').value,'Corrected German.\n\n112.');assert(d.element('#correction-status').textContent.includes('saved and verified'));assert.equal(d.element('#translation-status').textContent,'Manually corrected translation available.');assert.equal(d.element('#drawer-fields').disabled,false);
+});
+test('C3 source/target switches and closing disclosure retain the correction draft',async()=>{
+ const d=await correctionEditor();d.element('#correct-welcome').value='Unsaved correction';d.element('#correct-welcome').listeners.input();d.element('#translation-target').value='fr-FR';d.element('#translation-target').listeners.change();assert.equal(d.element('#translation-target').value,'de-DE');d.element('#translation-source').value='el-GR';d.element('#translation-source').listeners.change();assert.equal(d.element('#translation-source').value,'en-GB');
+ d.element('#section-translations').open=false;d.element('#section-translations').listeners.toggle();d.element('#section-translations').open=true;d.element('#section-translations').listeners.toggle();assert.equal(d.element('#correct-welcome').value,'Unsaved correction');assert(d.run('correctionDirty()'));assert.equal(d.element('#translation-correction').hidden,false);
+});
+test('C3 Cancel and explicit refresh require intentional discard; cancelled actions preserve the draft',async()=>{
+ const d=await correctionEditor();d.element('#correct-welcome').value='Unsaved';d.options.confirm=false;assert.equal(d.run('cancelTranslationCorrection()'),false);const n=d.requests.length;await d.run('readSourceMetadata()');assert.equal(d.requests.length,n);assert.equal(d.element('#correct-welcome').value,'Unsaved');assert(d.run('!!sectionTranslations.correction'));
+ d.options.confirm=true;assert.equal(d.run('cancelTranslationCorrection()'),true);assert.equal(d.element('#translation-correction').hidden,true);assert.equal(d.element('#translation-preview').hidden,false);
+});
+test('C3 close/Escape shares original discard protection and keep editing preserves correction text',async()=>{
+ const d=await correctionEditor();d.element('#correct-welcome').value='Draft';d.run('requestEditorClose()');assert.equal(d.element('#discard-dialog').open,true);assert.equal(d.element('#editor-drawer').open,true);d.run('keepEditing()');assert.equal(d.element('#correct-welcome').value,'Draft');d.element('#discard-changes').click();assert.equal(d.element('#editor-drawer').open,false);assert.equal(d.run('sectionTranslations'),null);
+});
+test('C3 property/new-property switches require discard and obsolete saves cannot repaint a new editor',async()=>{
+ const d=await correctionEditor();d.element('#correct-welcome').value='Draft';d.options.confirm=false;d.run(`activeId=${JSON.stringify(b.id)};loadActive()`);assert.equal(d.run('activeId'),a.id);assert.equal(d.element('#correct-welcome').value,'Draft');d.run('newProperty()');assert.equal(d.run('activeId'),a.id);assert.equal(d.element('#editor-drawer').open,true);
+ d.options.confirm=true;const work=d.run('saveTranslationCorrection()'),req=d.requests.at(-1);d.run('closeEditor();openEditor(FIELDS[2])');req.reply({status:'corrected'});await work;assert.notEqual(d.element('#correction-status').textContent,'Correction saved and verified. Your original text is unchanged.');assert.equal(d.element('#translation-correction').hidden,true);
+});
+for(const failure of ['conflict','network','verification'])test('C3 '+failure+' preserves draft, blocks resubmission and requires explicit fresh status',async()=>{
+ const d=await correctionEditor();d.element('#correct-welcome').value='Unsaved correction';const work=d.run('saveTranslationCorrection()'),req=d.requests.at(-1);
+ if(failure==='conflict')req.reply({error:'PRIVATE_DETAILS'},false,409);else if(failure==='network')req.fail(Error('PRIVATE_NETWORK'));else{req.reply({status:'corrected'});await tick();d.requests.at(-1).reply(savedTranslation('manual',{welcome:'Someone else edited this.'}));await tick();d.requests.at(-1).reply(sourceMeta('en-GB',2));}
+ await work;assert.equal(d.element('#correct-welcome').value,'Unsaved correction');assert.equal(d.element('#save-correction').disabled,true);assert(!d.element('#correction-status').textContent.includes('PRIVATE'));assert(d.element('#correction-status').textContent.includes('still here'));const n=d.requests.length;await d.run('saveTranslationCorrection()');assert.equal(d.requests.length,n);
+ d.options.confirm=false;await d.run('readSourceMetadata()');assert.equal(d.requests.length,n);assert.equal(d.element('#correct-welcome').value,'Unsaved correction');d.options.confirm=true;assert(d.run('cancelTranslationCorrection()'));assert.equal(d.run('sectionTranslations.locked'),true);d.run('beginTranslationCorrection()');assert.equal(d.run('sectionTranslations.correction'),null);
+});
+test('C3 requires current real-provenance snapshot and never edits mock/original/malformed results',async()=>{
+ for(const value of [{status:'original',language:'en-GB'}, {...savedTranslation(),providerMode:'mock'}, {...savedTranslation(),correction:{sourceVersion:2}}, {...savedTranslation(),correction:{...savedTranslation().correction,translatedText:'{"welcome":"Different snapshot"}'}}]){
+  const d=await translationEditor(sourceMeta('en-GB',2));await savedView(d,value);assert.equal(d.element('#edit-translation').hidden,true);d.run('beginTranslationCorrection()');assert.equal(d.run('sectionTranslations.correction'),null);
+ }
+});
+test('C3 two-field arrival and six-locale switching preserve paragraphs, labels and exact draft values',async()=>{
+ const d=await loaded();d.run('closeEditor();openEditor(FIELDS.find(s=>s.id==="arrival"))');d.options.form={checkin:'',checkout:''};d.element('#section-translations').open=true;const read=d.run('readSourceMetadata()');d.requests.at(-1).reply({...sourceMeta('en-GB',2),section:'arrival'});await read;d.element('#translation-target').value='de-DE';const view=d.run('readSavedTranslation()');d.requests.at(-1).reply(savedTranslation('generated',{checkin:'Ankunft 15:00.\n\nBitte klingeln.',checkout:'Abreise 11:00.'}));await tick();d.requests.at(-1).reply({...sourceMeta('en-GB',2),section:'arrival'});await view;d.run('beginTranslationCorrection()');assert.equal(d.element('#correct-checkin').value,'Ankunft 15:00.\n\nBitte klingeln.');assert.equal(d.element('#correct-checkout').value,'Abreise 11:00.');d.element('#correct-checkout').value='Geändert 11:00.';const n=d.requests.length;
+ for(const locale of Object.keys(HOST_LANGUAGES)){d.run(`hostI18n.setLocale(${JSON.stringify(locale)});applyHostLanguage()`);assert.equal(d.element('#correct-checkout').value,'Geändert 11:00.');assert.equal(d.requests.length,n);assert.equal(d.element('#translation-target').value,'de-DE');}
 });

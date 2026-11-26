@@ -414,3 +414,9 @@
 .drawer-bottom .button, .discard-actions .button { white-space: normal; min-width: 0; text-align: center; }
 .discard-actions, .editor-card-footer { flex-wrap: wrap; }
 .editor-card-copy strong { overflow-wrap: anywhere; hyphens: auto; }
+
+/* C3: inline corrections share the existing compact disclosure and field styling. */
+#translation-correction { display: grid; gap: 12px; min-width: 0; }
+#translation-correction[hidden] { display: none; }
+#correction-fields { margin: 0; padding: 0; border: 0; min-width: 0; }
+#correction-fields textarea { width: 100%; min-width: 0; resize: vertical; }

@@ -209,5 +209,14 @@ export default Object.freeze({
   "Generation availability could not be checked. Translation remains disabled.": "Impossible de vérifier la disponibilité. La traduction reste désactivée.",
   "Send the saved text in this section to the translation provider? Your original text will not change.": "Envoyer le texte enregistré de cette rubrique au fournisseur de traduction ? Votre texte original ne changera pas.",
   "Saved translation verified.": "Traduction enregistrée vérifiée.",
-  "Test translation saved and verified.": "Traduction de test enregistrée et vérifiée."
+  "Test translation saved and verified.": "Traduction de test enregistrée et vérifiée.",
+  "Edit translation": "Modifier la traduction",
+  "Save correction": "Enregistrer la correction",
+  "Edit the saved translation only. Your original text stays unchanged; no AI request is made.": "Modifiez uniquement la traduction enregistrée. Le texte original reste inchangé ; aucune requête IA n’est envoyée.",
+  "Discard your unsaved translation correction? Copy any text you want to keep before continuing.": "Abandonner votre correction non enregistrée ? Copiez le texte à conserver avant de continuer.",
+  "Refresh saved status before editing this translation again.": "Actualisez l’état enregistré avant de modifier à nouveau cette traduction.",
+  "Saving correction…": "Enregistrement de la correction…",
+  "Correction saved and verified. Your original text is unchanged.": "Correction enregistrée et vérifiée. Le texte original reste inchangé.",
+  "This translation changed or could not be saved. Your correction is still here. Copy it somewhere safe, then explicitly refresh saved status to review the latest text.": "Cette traduction a changé ou n’a pas pu être enregistrée. Votre correction est toujours ici. Copiez-la en lieu sûr, puis actualisez explicitement l’état enregistré pour consulter le texte le plus récent.",
+  "The correction could not be confirmed. Your text is still here. Copy it somewhere safe, then explicitly refresh saved status before saving again.": "La correction n’a pas pu être confirmée. Votre texte est toujours ici. Copiez-le en lieu sûr, puis actualisez explicitement l’état enregistré avant de l’enregistrer à nouveau."
 });

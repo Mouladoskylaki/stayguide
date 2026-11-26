@@ -209,5 +209,14 @@ export default Object.freeze({
   "Generation availability could not be checked. Translation remains disabled.": "Generation availability could not be checked. Translation remains disabled.",
   "Send the saved text in this section to the translation provider? Your original text will not change.": "Send the saved text in this section to the translation provider? Your original text will not change.",
   "Saved translation verified.": "Saved translation verified.",
-  "Test translation saved and verified.": "Test translation saved and verified."
+  "Test translation saved and verified.": "Test translation saved and verified.",
+  "Edit translation": "Edit translation",
+  "Save correction": "Save correction",
+  "Edit the saved translation only. Your original text stays unchanged; no AI request is made.": "Edit the saved translation only. Your original text stays unchanged; no AI request is made.",
+  "Discard your unsaved translation correction? Copy any text you want to keep before continuing.": "Discard your unsaved translation correction? Copy any text you want to keep before continuing.",
+  "Refresh saved status before editing this translation again.": "Refresh saved status before editing this translation again.",
+  "Saving correction…": "Saving correction…",
+  "Correction saved and verified. Your original text is unchanged.": "Correction saved and verified. Your original text is unchanged.",
+  "This translation changed or could not be saved. Your correction is still here. Copy it somewhere safe, then explicitly refresh saved status to review the latest text.": "This translation changed or could not be saved. Your correction is still here. Copy it somewhere safe, then explicitly refresh saved status to review the latest text.",
+  "The correction could not be confirmed. Your text is still here. Copy it somewhere safe, then explicitly refresh saved status before saving again.": "The correction could not be confirmed. Your text is still here. Copy it somewhere safe, then explicitly refresh saved status before saving again."
 });

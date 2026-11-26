@@ -209,5 +209,14 @@ export default Object.freeze({
   "Generation availability could not be checked. Translation remains disabled.": "Impossibile verificare la disponibilità. La traduzione resta disattivata.",
   "Send the saved text in this section to the translation provider? Your original text will not change.": "Inviare il testo salvato di questa sezione al fornitore di traduzione? Il testo originale non cambierà.",
   "Saved translation verified.": "Traduzione salvata verificata.",
-  "Test translation saved and verified.": "Traduzione di test salvata e verificata."
+  "Test translation saved and verified.": "Traduzione di test salvata e verificata.",
+  "Edit translation": "Modifica traduzione",
+  "Save correction": "Salva correzione",
+  "Edit the saved translation only. Your original text stays unchanged; no AI request is made.": "Modifica solo la traduzione salvata. Il testo originale resta invariato; non viene inviata alcuna richiesta AI.",
+  "Discard your unsaved translation correction? Copy any text you want to keep before continuing.": "Scartare la correzione non salvata? Copia il testo che vuoi conservare prima di continuare.",
+  "Refresh saved status before editing this translation again.": "Aggiorna lo stato salvato prima di modificare di nuovo questa traduzione.",
+  "Saving correction…": "Salvataggio della correzione…",
+  "Correction saved and verified. Your original text is unchanged.": "Correzione salvata e verificata. Il testo originale è invariato.",
+  "This translation changed or could not be saved. Your correction is still here. Copy it somewhere safe, then explicitly refresh saved status to review the latest text.": "Questa traduzione è cambiata o non è stato possibile salvarla. La correzione è ancora qui. Copiala in un luogo sicuro, poi aggiorna esplicitamente lo stato salvato per controllare il testo più recente.",
+  "The correction could not be confirmed. Your text is still here. Copy it somewhere safe, then explicitly refresh saved status before saving again.": "Non è stato possibile confermare la correzione. Il testo è ancora qui. Copialo in un luogo sicuro, poi aggiorna esplicitamente lo stato salvato prima di salvare di nuovo."
 });

@@ -209,5 +209,14 @@ export default Object.freeze({
   "Generation availability could not be checked. Translation remains disabled.": "Η διαθεσιμότητα δημιουργίας δεν ελέγχθηκε. Η μετάφραση παραμένει απενεργοποιημένη.",
   "Send the saved text in this section to the translation provider? Your original text will not change.": "Να σταλεί το αποθηκευμένο κείμενο αυτής της ενότητας στον πάροχο μετάφρασης; Το αρχικό σας κείμενο δεν θα αλλάξει.",
   "Saved translation verified.": "Η αποθηκευμένη μετάφραση επιβεβαιώθηκε.",
-  "Test translation saved and verified.": "Η δοκιμαστική μετάφραση αποθηκεύτηκε και επιβεβαιώθηκε."
+  "Test translation saved and verified.": "Η δοκιμαστική μετάφραση αποθηκεύτηκε και επιβεβαιώθηκε.",
+  "Edit translation": "Επεξεργασία μετάφρασης",
+  "Save correction": "Αποθήκευση διόρθωσης",
+  "Edit the saved translation only. Your original text stays unchanged; no AI request is made.": "Επεξεργαστείτε μόνο την αποθηκευμένη μετάφραση. Το αρχικό κείμενο παραμένει ίδιο· δεν γίνεται αίτημα AI.",
+  "Discard your unsaved translation correction? Copy any text you want to keep before continuing.": "Απόρριψη της μη αποθηκευμένης διόρθωσης; Αντιγράψτε όποιο κείμενο θέλετε να κρατήσετε πριν συνεχίσετε.",
+  "Refresh saved status before editing this translation again.": "Ανανεώστε την αποθηκευμένη κατάσταση πριν επεξεργαστείτε ξανά αυτή τη μετάφραση.",
+  "Saving correction…": "Αποθήκευση διόρθωσης…",
+  "Correction saved and verified. Your original text is unchanged.": "Η διόρθωση αποθηκεύτηκε και επαληθεύτηκε. Το αρχικό κείμενο δεν άλλαξε.",
+  "This translation changed or could not be saved. Your correction is still here. Copy it somewhere safe, then explicitly refresh saved status to review the latest text.": "Η μετάφραση άλλαξε ή δεν ήταν δυνατή η αποθήκευση. Η διόρθωσή σας παραμένει εδώ. Αντιγράψτε τη σε ασφαλές μέρος και μετά ανανεώστε την αποθηκευμένη κατάσταση για να ελέγξετε το νεότερο κείμενο.",
+  "The correction could not be confirmed. Your text is still here. Copy it somewhere safe, then explicitly refresh saved status before saving again.": "Δεν επιβεβαιώθηκε η διόρθωση. Το κείμενό σας παραμένει εδώ. Αντιγράψτε το σε ασφαλές μέρος και μετά ανανεώστε την αποθηκευμένη κατάσταση πριν αποθηκεύσετε ξανά."
 });

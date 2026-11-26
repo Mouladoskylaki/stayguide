@@ -160,6 +160,7 @@ async function createGuide(model){
 }
 function getEntry(){return guides.find(g=>g.id===activeId);}
 async function loadActive(){
+  if(!confirmCorrectionDiscard()){activeId=sectionTranslations.id;persist();return;}
   const version=++loadVersion;
   current=null;currentRevision=null;closeEditor();clearGuidePresentation();
   $('#property-tabs').querySelectorAll('button').forEach(button=>{
@@ -242,19 +243,20 @@ const generationIdentity=(s,target)=>JSON.stringify([s.id,s.section,s.metadata?.
 const translationSections=['welcome','arrival','rules','appliances','parking','local_tips','emergency','contact','additional'];
 // Source writes start only from a clean draft and temporarily disable the fields.
 // FormData omits disabled controls; that must not masquerade as changed text.
-const editorDirty=()=>!!editing&&sectionTranslations?.busy!=='source'&&editing.fields.some(([key])=>editorValues()[key]!==initialFields[key]);
+const editorDirty=()=>!!editing&&!sectionTranslations?.correction&&sectionTranslations?.busy!=='source'&&editing.fields.some(([key])=>editorValues()[key]!==initialFields[key]);
 function translationContext(state){return state===sectionTranslations&&editing?.id===state.section&&editorVersion===state.editor&&loadVersion===state.load&&activeId===state.id&&!storageProblem;}
-function translationPreviewClear(){if(sectionTranslations){sectionTranslations.hasSaved=false;sectionTranslations.capability=null;}const node=$('#translation-preview');node.replaceChildren();node.hidden=true;node.removeAttribute('lang');}
+function translationPreviewClear(){if(sectionTranslations){sectionTranslations.hasSaved=false;sectionTranslations.capability=null;sectionTranslations.saved=null;}const node=$('#translation-preview');node.replaceChildren();node.hidden=true;node.removeAttribute('lang');}
 function translationOptions(select,empty){
   select.replaceChildren();const placeholder=document.createElement('option');placeholder.value='';hostI18n.text(placeholder,empty);select.append(placeholder);
   for(const [locale,name] of Object.entries(HOST_LANGUAGES)){const option=document.createElement('option');option.value=locale;option.lang=locale;option.textContent=name;select.append(option);}
 }
 function resetSectionTranslations(){
+  $('#translation-correction').hidden=true;$('#edit-translation').hidden=true;$('#correction-fields').replaceChildren();ui('#correction-status','');
   sectionTranslations=null;$('#section-translations').open=false;$('#section-translations').hidden=!editing||!translationSections.includes(editing.id);
   translationPreviewClear();ui('#translation-source-state','');ui('#translation-status','');
   translationOptions($('#translation-source'),'Choose the source language');translationOptions($('#translation-target'),'Choose a target language');
   if(editing&&translationSections.includes(editing.id)){
-    const entry=getEntry();sectionTranslations={id:entry.id,token:entry.token,section:editing.id,editor:editorVersion,load:loadVersion,serial:0,metadata:null,busy:'',locked:false,status:'Choose a target language to view saved text.',dirty:false,capability:null,hasSaved:false,generationStatus:''};
+    const entry=getEntry();sectionTranslations={id:entry.id,token:entry.token,section:editing.id,editor:editorVersion,load:loadVersion,serial:0,metadata:null,busy:'',locked:false,status:'Choose a target language to view saved text.',dirty:false,capability:null,hasSaved:false,generationStatus:'',saved:null,correction:null};
   }
   updateTranslationControls();
 }
@@ -274,6 +276,19 @@ function updateTranslationControls(){
   $('#save-editor').disabled=editorSaving||editorConflict||s.busy==='source';
   ui('#translation-status',dirty||editorSaving?'Save or discard your text changes before using translation settings.':s.status);
   updateGenerationControls(s);
+  const correction=s.correction;
+  $('#translation-preview').hidden=!!correction||!s.hasSaved;
+  $('#translation-generation-note').hidden=!!correction;$('#translation-generation-status').hidden=!!correction;
+  if(correction){
+    $('#translation-source').disabled=true;$('#save-source-language').disabled=true;$('#translation-target').disabled=true;
+    $('#drawer-fields').disabled=true;$('#save-editor').disabled=true;$('#generate-translation').hidden=true;
+    $('#refresh-translations').disabled=!!s.busy||correction.saving;
+  }
+  $('#translation-correction').hidden=!correction;
+  $('#edit-translation').hidden=!!correction||!s.hasSaved||!validCorrectionView(s.saved,s,$('#translation-target').value);
+  $('#edit-translation').disabled=!!s.busy||dirty||editorSaving||editorConflict||s.locked;
+  $('#save-correction').disabled=!correction||!correctionDirty()||correction.blocked||correction.saving;
+  $('#correction-fields').disabled=!!correction?.saving;
 }
 function validSourceMetadata(value,section){return value?.section===section&&Number.isSafeInteger(value.sourceVersion)&&value.sourceVersion>0&&typeof value.declared==='boolean'&&(value.sourceLanguage===null&&!value.declared||typeof value.sourceLanguage==='string'&&/^[a-zA-Z]{2,3}(?:-[a-zA-Z0-9]{2,8})*$/.test(value.sourceLanguage)&&value.declared);}
 function showSourceMetadata(s){
@@ -286,7 +301,8 @@ function showSourceMetadata(s){
   ui('#translation-source-state',language?'Saved source language: {language}':'Source language not declared.',{language:HOST_LANGUAGES[language]||language});
 }
 async function readSourceMetadata(){
-  const s=sectionTranslations;if(!s||!translationContext(s)||!$('#section-translations').open||editorDirty()||editorSaving||editorConflict||s.busy==='source'||s.busy==='generation')return;
+  const s=sectionTranslations;if(!s||!translationContext(s)||!$('#section-translations').open||editorDirty()||editorSaving||editorConflict||s.busy==='source'||s.busy==='generation'||s.correction?.saving)return;
+  if(s.correction&&!cancelTranslationCorrection(false))return;
   const keptTarget=$('#translation-target').value;
   const serial=++s.serial;s.generationStatus='';s.busy='metadata';s.locked=true;s.metadata=null;s.status='Loading saved translation status…';translationPreviewClear();$('#translation-target').value=Object.hasOwn(HOST_LANGUAGES,keptTarget)?keptTarget:'';updateTranslationControls();
   try{
@@ -300,7 +316,7 @@ async function readSourceMetadata(){
 }
 async function saveSourceLanguage(){
   const s=sectionTranslations,language=$('#translation-source').value;
-  if(!s||!translationContext(s)||!$('#section-translations').open||editorDirty()||editorSaving||editorConflict||s.busy||s.locked||!s.metadata||!Object.hasOwn(HOST_LANGUAGES,language)||language===s.metadata.sourceLanguage)return;
+  if(!s||!translationContext(s)||!$('#section-translations').open||editorDirty()||editorSaving||editorConflict||s.busy||s.locked||s.correction||!s.metadata||!Object.hasOwn(HOST_LANGUAGES,language)||language===s.metadata.sourceLanguage)return;
   if(s.metadata.declared&&!confirm(t('Change this section’s source language? Its previous translations will become unavailable. Your original text will stay unchanged.')))return;
   const expected=s.metadata.sourceVersion,serial=++s.serial,restoreFocus=document.activeElement===$('#save-source-language');s.busy='source';s.status='Saving source language…';translationPreviewClear();$('#translation-target').value='';updateTranslationControls();
   try{
@@ -313,7 +329,7 @@ async function saveSourceLanguage(){
 }
 async function readSavedTranslation(){
   const s=sectionTranslations,target=$('#translation-target').value;
-  if(!s||!translationContext(s)||!$('#section-translations').open||editorDirty()||editorSaving||editorConflict||s.locked||!s.metadata?.declared||s.busy==='source'||s.busy==='metadata'||!Object.hasOwn(HOST_LANGUAGES,target)||$('#translation-source').value!==s.metadata.sourceLanguage)return;
+  if(!s||!translationContext(s)||!$('#section-translations').open||editorDirty()||editorSaving||editorConflict||s.locked||!s.metadata?.declared||s.busy==='source'||s.busy==='metadata'||s.correction||!Object.hasOwn(HOST_LANGUAGES,target)||$('#translation-source').value!==s.metadata.sourceLanguage)return;
   const expected={...s.metadata},serial=++s.serial;s.generationStatus='';s.busy='view';s.status='Loading saved translation status…';translationPreviewClear();updateTranslationControls();
   try{
     const result=await api(`/api/guides/${s.id}/translations?section=${encodeURIComponent(s.section)}&lang=${encodeURIComponent(target)}`,{headers:{Authorization:`Bearer ${s.token}`},cache:'no-store'});
@@ -325,9 +341,7 @@ async function readSavedTranslation(){
     if(result.status==='translated'&&result.providerMode==='openai'){
       const keys=editing.fields.map(([key])=>key).filter(key=>key!=='property_name');
       if(result.language!==target||result.correction?.sourceVersion!==expected.sourceVersion||!['manual','generated'].includes(result.origin)||!result.fields||Object.keys(result.fields).sort().join()!==keys.sort().join()||!keys.every(key=>typeof result.fields[key]==='string'))throw Error();
-      const preview=$('#translation-preview');
-      for(const [key,label] of editing.fields){if(key==='property_name')continue;const dt=document.createElement('dt'),dd=document.createElement('dd');hostI18n.text(dt,label);dd.setAttribute('lang',target);dd.textContent=result.fields[key];preview.append(dt);preview.append(dd);}
-      preview.hidden=false;s.hasSaved=true;s.status=result.origin==='manual'?'Manually corrected translation available.':'Current saved translation available.';
+      showSavedTranslation(s,result,target);s.status=result.origin==='manual'?'Manually corrected translation available.':'Current saved translation available.';
     }else if(result.status==='translated'&&result.providerMode==='mock')s.status='Test output is not a saved AI translation.';
     else if(result.status==='original'&&result.language===expected.sourceLanguage)s.status=target===expected.sourceLanguage?'This is the original language.':'No current saved translation available.';
     else throw Error();
@@ -336,6 +350,64 @@ async function readSavedTranslation(){
   }catch{if(translationContext(s)&&serial===s.serial){translationPreviewClear();s.status='Saved status could not be loaded. Check your connection, then refresh.';}}
   finally{if(translationContext(s)&&serial===s.serial){s.busy='';updateTranslationControls();}}
 }
+
+function validCorrectionView(result,s,target){
+  try{
+    const expected=result?.correction,keys=editing.fields.filter(([k])=>k!=='property_name').map(([k])=>k);
+    if(!Object.hasOwn(HOST_LANGUAGES,s.metadata?.sourceLanguage)||result?.status!=='translated'||result.providerMode!=='openai'||result.language!==target||!['manual','generated'].includes(result.origin)||expected?.sourceVersion!==s.metadata?.sourceVersion||typeof expected.translationId!=='string'||!expected.translationId.length||expected.translationId.length>128||typeof expected.translatedText!=='string')return false;
+    const previous=JSON.parse(expected.translatedText);
+    return previous&&Object.keys(previous).sort().join()===keys.sort().join()&&keys.every(k=>typeof previous[k]==='string'&&previous[k]===result.fields[k]);
+  }catch{return false;}
+}
+function showSavedTranslation(s,result,target){
+  const preview=$('#translation-preview');preview.replaceChildren();
+  for(const [key,label] of editing.fields){if(key==='property_name')continue;const dt=document.createElement('dt'),dd=document.createElement('dd');hostI18n.text(dt,label);dd.setAttribute('lang',target);dd.textContent=result.fields[key];preview.append(dt);preview.append(dd);}
+  preview.hidden=false;s.hasSaved=true;s.saved=JSON.parse(JSON.stringify(result));
+}
+function correctionDirty(){
+  const c=sectionTranslations?.correction;
+  return !!c&&Object.keys(c.fields).some(k=>$('#correct-'+k).value!==c.fields[k]);
+}
+function confirmCorrectionDiscard(){return !correctionDirty()||confirm(t('Discard your unsaved translation correction? Copy any text you want to keep before continuing.'));}
+function beginTranslationCorrection(){
+  const s=sectionTranslations,target=$('#translation-target').value;
+  if(!s||!translationContext(s)||s.correction||s.busy||s.locked||editorDirty()||editorSaving||editorConflict||!s.hasSaved||!validCorrectionView(s.saved,s,target))return;
+  s.serial++;s.correction={target,sourceLanguage:s.metadata.sourceLanguage,expected:{...s.saved.correction},fields:Object.fromEntries(Object.entries(s.saved.fields).map(([k,v])=>[k,v.replace(/\r\n?/g,'\n')])),blocked:false,saving:false};
+  const container=$('#correction-fields');container.replaceChildren();
+  for(const [key,label] of editing.fields){
+    if(key==='property_name')continue;
+    const row=document.createElement('div'),lab=document.createElement('label'),input=document.createElement('textarea');row.className='form-field';lab.setAttribute('for','correct-'+key);hostI18n.text(lab,label);input.id='correct-'+key;input.rows=5;input.value=s.correction.fields[key];input.setAttribute('lang',target);input.setAttribute('aria-describedby','correction-status');input.addEventListener('input',updateTranslationControls);row.append(lab);row.append(input);container.append(row);
+  }
+  ui('#correction-status','');updateTranslationControls();$('#correct-'+Object.keys(s.correction.fields)[0]).focus({preventScroll:true});
+}
+function cancelTranslationCorrection(restoreFocus=true){
+  const s=sectionTranslations;if(!s?.correction||s.correction.saving||!confirmCorrectionDiscard())return false;
+  const blocked=s.correction.blocked;s.serial++;s.correction=null;$('#correction-fields').replaceChildren();ui('#correction-status','');
+  // An uncertain or conflicting submission requires an explicit fresh read.
+  if(blocked){s.locked=true;translationPreviewClear();s.status='Refresh saved status before editing this translation again.';}
+  updateTranslationControls();if(restoreFocus)$(blocked?'#refresh-translations':'#edit-translation').focus({preventScroll:true});return true;
+}
+async function saveTranslationCorrection(){
+  const s=sectionTranslations,c=s?.correction;
+  if(!c||!translationContext(s)||c.saving||c.blocked||!correctionDirty()||s.busy||s.locked||editorSaving||editorConflict)return;
+  const fields=Object.fromEntries(Object.keys(c.fields).map(k=>[k,$('#correct-'+k).value])),serial=++s.serial;c.saving=true;
+  ui('#correction-status','Saving correction…');updateTranslationControls();$('#correction-status').focus({preventScroll:true});
+  try{
+    const applied=await api(`/api/guides/${s.id}/translations`,{method:'PATCH',headers:{Authorization:`Bearer ${s.token}`},body:JSON.stringify({section:s.section,targetLanguage:c.target,fields,expected:c.expected})});
+    if(!translationContext(s)||serial!==s.serial||s.correction!==c)return;
+    if(applied.status!=='corrected')throw Error();
+    const saved=await api(`/api/guides/${s.id}/translations?section=${encodeURIComponent(s.section)}&lang=${encodeURIComponent(c.target)}`,{headers:{Authorization:`Bearer ${s.token}`},cache:'no-store'});
+    if(!translationContext(s)||serial!==s.serial||s.correction!==c)return;
+    const meta=await api(`/api/guides/${s.id}/translation-sources/${s.section}`,{headers:{Authorization:`Bearer ${s.token}`},cache:'no-store'});
+    if(!translationContext(s)||serial!==s.serial||s.correction!==c)return;
+    if(!validSourceMetadata(meta,s.section)||meta.sourceVersion!==c.expected.sourceVersion||meta.sourceLanguage!==c.sourceLanguage||!validCorrectionView(saved,s,c.target)||saved.origin!=='manual'||saved.correction.translationId!==c.expected.translationId||!Object.keys(fields).every(k=>saved.fields[k]===fields[k]))throw Error();
+    s.correction=null;$('#correction-fields').replaceChildren();showSavedTranslation(s,saved,c.target);s.status='Manually corrected translation available.';ui('#correction-status','Correction saved and verified. Your original text is unchanged.');updateTranslationControls();$('#edit-translation').focus({preventScroll:true});
+  }catch(error){if(translationContext(s)&&serial===s.serial&&s.correction===c){c.blocked=true;s.hasSaved=false;s.saved=null;$('#translation-preview').hidden=true;s.status='Saved status may be outdated. Refresh to review it.';ui('#correction-status',error.status===409?'This translation changed or could not be saved. Your correction is still here. Copy it somewhere safe, then explicitly refresh saved status to review the latest text.':'The correction could not be confirmed. Your text is still here. Copy it somewhere safe, then explicitly refresh saved status before saving again.');$('#correction-status').focus({preventScroll:true});}}
+  finally{if(translationContext(s)&&serial===s.serial&&s.correction===c){c.saving=false;updateTranslationControls();}}
+}
+$('#edit-translation').addEventListener('click',beginTranslationCorrection);
+$('#save-correction').addEventListener('click',saveTranslationCorrection);
+$('#cancel-correction').addEventListener('click',()=>cancelTranslationCorrection());
 
 const generationMessages={
  unavailable:'AI translation generation is not available yet. Saved translations can still be viewed.',
@@ -376,7 +448,7 @@ async function readGenerationCapability(s,serial,target,expected){
 }
 async function generateSectionTranslation(){
   const s=sectionTranslations,target=$('#translation-target').value;
-  if(!s||!translationContext(s)||!$('#section-translations').open||editorDirty()||editorSaving||editorConflict||s.busy||s.locked||!s.metadata?.declared||s.capability?.generationAvailable!==true||s.capability.testOnly!==true||s.capability.sourceVersion!==s.metadata.sourceVersion||s.hasSaved||!Object.hasOwn(HOST_LANGUAGES,target)||target===s.metadata.sourceLanguage||$('#translation-source').value!==s.metadata.sourceLanguage||generationAttempts.has(generationIdentity(s,target)))return;
+  if(!s||!translationContext(s)||!$('#section-translations').open||editorDirty()||editorSaving||editorConflict||s.busy||s.locked||s.correction||!s.metadata?.declared||s.capability?.generationAvailable!==true||s.capability.testOnly!==true||s.capability.sourceVersion!==s.metadata.sourceVersion||s.hasSaved||!Object.hasOwn(HOST_LANGUAGES,target)||target===s.metadata.sourceLanguage||$('#translation-source').value!==s.metadata.sourceLanguage||generationAttempts.has(generationIdentity(s,target)))return;
   if(!sourceTextForTranslation().trim()){s.generationStatus=generationMessages.empty;updateTranslationControls();return;}
   if([...sourceTextForTranslation()].length>1200){s.generationStatus=generationMessages.input_limit;updateTranslationControls();return;}
   if(!confirm(t('Send the saved text in this section to the translation provider? Your original text will not change.')))return;
@@ -402,11 +474,12 @@ async function generateSectionTranslation(){
 $('#generate-translation').addEventListener('click',generateSectionTranslation);
 
 $('#section-translations').addEventListener('toggle',()=>{
+  if(sectionTranslations?.correction){updateTranslationControls();return;}
   if($('#section-translations').open)readSourceMetadata();
   else if(sectionTranslations&&sectionTranslations.busy!=='source'){sectionTranslations.serial++;sectionTranslations.busy='';translationPreviewClear();}
 });
-$('#translation-source').addEventListener('change',()=>{const s=sectionTranslations;if(s&&!s.busy&&!s.locked&&!editorDirty()&&!editorSaving&&!editorConflict){s.serial++;s.generationStatus='';s.status=$('#translation-source').value===s.metadata?.sourceLanguage?'Choose a target language to view saved text.':'Save the selected source language before viewing translations.';$('#translation-target').value='';translationPreviewClear();updateTranslationControls();}});
-$('#translation-target').addEventListener('change',()=>{if(['source','generation'].includes(sectionTranslations?.busy))return;if(!$('#translation-target').value&&sectionTranslations){sectionTranslations.serial++;sectionTranslations.generationStatus='';sectionTranslations.busy='';translationPreviewClear();sectionTranslations.status='Choose a target language to view saved text.';updateTranslationControls();}else readSavedTranslation();});
+$('#translation-source').addEventListener('change',()=>{const s=sectionTranslations;if(s?.correction){$('#translation-source').value=s.correction.sourceLanguage;return;}if(s&&!s.busy&&!s.locked&&!editorDirty()&&!editorSaving&&!editorConflict){s.serial++;s.generationStatus='';s.status=$('#translation-source').value===s.metadata?.sourceLanguage?'Choose a target language to view saved text.':'Save the selected source language before viewing translations.';$('#translation-target').value='';translationPreviewClear();updateTranslationControls();}});
+$('#translation-target').addEventListener('change',()=>{if(sectionTranslations?.correction){$('#translation-target').value=sectionTranslations.correction.target;return;}if(['source','generation'].includes(sectionTranslations?.busy))return;if(!$('#translation-target').value&&sectionTranslations){sectionTranslations.serial++;sectionTranslations.generationStatus='';sectionTranslations.busy='';translationPreviewClear();sectionTranslations.status='Choose a target language to view saved text.';updateTranslationControls();}else readSavedTranslation();});
 $('#save-source-language').addEventListener('click',saveSourceLanguage);
 $('#refresh-translations').addEventListener('click',readSourceMetadata);
 $('#drawer-fields').addEventListener('input',updateTranslationControls);
@@ -453,7 +526,7 @@ function closeEditor(restoreFocus=false){
 }
 function requestEditorClose(){
   if(!editing||editorSaving)return;
-  if(editorDirty()){
+  if(editorDirty()||correctionDirty()){
     $('#discard-dialog').hidden=false;$('#discard-dialog').showModal();$('#keep-editing').focus();
   }else closeEditor(true);
 }
@@ -470,7 +543,7 @@ function sizeEditor(){
 globalThis.visualViewport?.addEventListener('resize',sizeEditor);
 globalThis.visualViewport?.addEventListener('scroll',sizeEditor);
 $('#section-form').addEventListener('submit',async e=>{
-  e.preventDefault();if(!editing||!current||storageProblem||editorSaving||editorConflict||sectionTranslations?.busy==='source'||!isGuideRevision(currentRevision))return;
+  e.preventDefault();if(!editing||!current||storageProblem||editorSaving||editorConflict||(sectionTranslations?.busy==='source'||sectionTranslations?.correction)||!isGuideRevision(currentRevision))return;
   const patch=editorValues(),sectionId=editing.id;
   if('property_name' in patch&&!patch.property_name.trim()){
     hostI18n.text($('#editor-error'),"Please enter a property name.");
@@ -617,7 +690,7 @@ $('#create-form').addEventListener('submit',async e=>{
   try{await createGuide({property_name:name});$('#first-name').value='';}
   catch{alert(t('Your guide could not be created. Check your connection and try again.'));}finally{btn.disabled=false;hostI18n.text(btn,"Create my guide ↗");}
 });
-function newProperty(){if(storageProblem)return;loadVersion++;current=null;closeEditor();showEmpty();$('#first-name').focus();}
+function newProperty(){if(storageProblem||!confirmCorrectionDiscard())return;loadVersion++;current=null;closeEditor();showEmpty();$('#first-name').focus();}
 $('#new-property').addEventListener('click',newProperty);
 $('#copy-link').addEventListener('click',async()=>{
   if(!current||storageProblem)return;

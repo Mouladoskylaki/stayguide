@@ -166,3 +166,58 @@ Evidence directory: `.local/qa/sg-p31-w4b-c2-20261125/` (ignored). Existing read
 Real generation remains disabled. The fake provider intentionally uses OpenAI storage provenance only to exercise the existing production-shaped path; its synthetic strings and accounting are not AI quality, authoritative remote token counting or billing evidence. No live harness or consumed guard was opened for execution. No changes to provider/model, backend generation contract, durable storage, reservations, dependencies, schema, deployment configuration, guest or PDF implementation.
 
 The permanent attempt fence prevents application redispatch; it does not guarantee external exactly-once execution or known billing after uncertainty. Safe transient-failure recovery/cancellation remains mandatory before launch. Production D1, ownership/account/quota policy, free-text privacy, qualified six-language quality/accessibility, real mobile devices, physical QR/print and public-launch gates remain unverified. Manual correction UI, guest language selection and translated PDFs remain pending. No public-launch readiness is implied. Next action: independent C2 review only; C3 requires separate authorization.
+
+
+## SG-P31-W4B-C3 — manual translation corrections
+
+Owner-authorized implementation on 2026-11-25 from clean `main` at `786fdd3be30c608fe89ce3aa67bb69c9a6478ae6`. Awaiting independent review. No schema, migration, dependency, provider/model, translation SQL, local-adapter or generation-enable change. Earlier C1/C2 statements about pending manual editing are historical; this section records C3's bounded implementation, not public-launch acceptance.
+
+### Owner API and storage contract
+
+`PATCH /api/guides/{id}/translations` authenticates the existing guide owner **before reading the body**. Content-Type must be application/json. Exactly four top-level keys are accepted:
+
+```json
+{
+  "section": "arrival",
+  "targetLanguage": "de-DE",
+  "fields": {"checkin": "Ankunft 15:00.", "checkout": "Abreise 11:00."},
+  "expected": {
+    "sourceVersion": 2,
+    "translationId": "<exact identity returned by the saved view>",
+    "translatedText": "<exact serialized snapshot returned by the saved view>"
+  }
+}
+```
+
+`expected` has exactly those three keys. Its snapshot is the **old** saved serialized text, never the proposed correction or a silently refreshed expectation. Nine eligible sections and the six milestone languages only (both current declared source and requested target). Fields must exactly match the section allowlist; property names, Wi-Fi fields and arbitrary extra keys are rejected. Strings are bounded to the existing 3,200 UTF-8 bytes per translated field. The endpoint caps the streamed body at **98,304 bytes (96 KiB)** and the serialized previous snapshot at 40,000 bytes. This accounts for two fields plus JSON escaping of the exact previous snapshot; the old 4 KiB generation/source request limit remains unchanged. No text is truncated.
+
+The route uses a storage-only OpenAI-mode service boundary, with generation unavailable. It never resolves an injected generation provider, live flag or credential callback. Existing `service.correct()` validates safe text, protected strings, empty-field parity, current source version, exact cached identity and previous text. Existing `store.correct()` binds these expectations to atomic SQL RETURNING, including current source/version predicates. Mock rows, originals, missing/stale/replaced translations and outdated/competing snapshots cannot be corrected or created through this route. Original guide data, source metadata, generation attempts and spending reservations are untouched.
+
+Success is `{status: "corrected"}` (HTTP 200); the UI must read back and verify the saved result. Shape/type/size violations return sanitized HTTP 400; unavailable guide/unauthorized owner use existing 404/401. A failed semantic validation/CAS or sanitized correction storage failure returns HTTP 409 `correction_conflict`. This deliberately does not reveal whether the underlying failure was a race, invalid protected content or a storage failure. No raw database/provider details are returned, and no retries are performed.
+
+### Host workflow and draft safety
+
+A current saved OpenAI-mode preview with valid exact correction metadata offers **Edit translation**, independently of generation availability. Compact inline textareas use the existing translated field labels, target-language tags and paragraph breaks; arrival exposes check-in and check-out separately. The view snapshot is captured once. Source fields, normal guide Save and source/target selection are disabled while correction mode is open; the correction uses its own Save correction/Cancel actions. No other modal or editor is added.
+
+Success requires PATCH acknowledgement plus authenticated saved read and source-metadata verification: matching source version/language, translation identity, manual provenance and proposed field values. Source text is never replaced. Conflict, rejected data, network failure or failed read-back retains the editable draft, hides potentially outdated preview output, disables resubmission and gives copy/review instructions. Refresh is explicit, prompts before discarding unsaved text, then rereads metadata/saved content. Cancel after a failed submission also requires fresh status before reopening an editor. There is no automatic retry, reload, generation or implicit expectation refresh.
+
+Closing the editor uses the existing discard dialog for correction drafts as well as original drafts. Property/new-property changes require explicit correction discard; rejected navigation restores the original selection. Source/target change events cannot bypass the editing interlock. Collapsing/reopening the disclosure preserves the draft; Cancel and refresh require intentional discard. Existing editor/property/request serials reject late responses. Six-language switches update labels/status without recreating textareas or changing content/expectations. Corrections become stale after a future source-version change; manual provenance is not a promise of perpetual currentness.
+
+### Checks executed for C3
+
+All checks below were run for this task with synthetic fixtures and existing offline guards. Evidence: ignored `.local/qa/sg-p31-w4b-c3-20261125/`. No live harness, API credential or external provider was used.
+
+- `node tests/translation-corrections.test.js`: **13 cases pass** (`api.log`): authentication before body/provider access; exact contract/limits; two-field/escaped snapshot; protected strings and empty parity; live-disabled success; source/attempt preservation; current real/mock separation; concurrent corrections; source edit/language change and replacement generation; injected concurrent update/source edit at the actual CAS boundary; sanitized database failure; unsupported legacy source remaining read-only.
+- `node tests/host-state.test.js`: **102 cases pass** (`host.log`), including ten C3 cases through the actual host entrypoint: exact expectations, verified read-back, zero generation, draft/discard interlocks, property/editor/target/source switching, stale async results, conflicts/network uncertainty/mismatched read-back, two-field editing and six-locale preservation. Existing source-save/If-Match and C1/C2 coverage remains included.
+- Complete guarded `npm test`: **17 test files pass**, zero failures (`npm-test.log`), including catalog key/placeholder parity and existing generation/fence/storage/QR/PDF regression tests.
+- All three existing SQLite suites executed successfully: `tests/guide-concurrency.sqlite.py`, `tests/translation-storage.sqlite.py`, `tests/source-language.sqlite.py`. They exercise actual shared SQL, migration/persistence, atomic corrections and guide/source concurrency against SQLite plus local-adapter parity. SQL and adapter behavior were reused unchanged.
+- **Seven actual disposable local D1 groups pass** (`d1-final.log`), driven by `tests/translation-corrections.d1.mjs`. Two overlapping HTTP corrections are held at the real manual SQL boundary; both reach it, exactly one RETURNING result is applied and one writer receives 409. Additional groups cover authentication/validation, source/guide/reservation preservation, two-field large requests, stale identity/snapshot/protected fields, source edits/declarations, guest saved-only reads and mock exclusion. Existing migrated synthetic state was cloned into `.local/qa/sg-p31-w4b-b-c3-20261125/correction-final/`; installed Node/Wrangler/workerd tooling was reused without installation or remote D1. The test worker forbids provider/key/live-flag access for correction requests. External worker requests: zero. This is **local runtime evidence, not production D1 validation**.
+- Complete guarded Chrome suite passes (`browser-full.log`): host creation/editing/recovery/concurrent-save flows; six-language localization; C1/C2; C3; guest/no-JS SSR; QR; A4/A5 downloads with 13 PDF fixtures and three warm repeats. A final focused C3 run (`browser-final.log`) adds native Tab-to-Save correction verification and representative captures. C3 verifies four explicit correction PATCH requests, zero generation POSTs, persistence/reload/manual status, paragraph/two-field accuracy, competing correction conflict, committed-but-truncated-response uncertainty and explicit recovery by saved read. The test controller's fault is not browser-controlled or production configuration.
+- **22 C3 screenshots** in `browser-final/`: editing in six locales at 1440/390/320px, plus saved/conflict/network/arrival states. Tested page/drawer widths have no horizontal overflow; native keyboard activation/Tab, focus and live status checks pass. Representative German mobile and conflict captures were visually inspected against the existing design direction; no pixel-perfect, qualified linguistic or exhaustive accessibility certification is claimed. Early diagnostic logs are preserved: one assertion used an input's own disabled property instead of inherited fieldset disabled semantics; another transport fault was refined to truncate an already-started response deterministically.
+- **36 historical evidence hashes/mtimes** and frozen corpus SHA-256 `d08695f229067cda36a8d1113b97cb243b7914c51e1655c8822622702d9d78fd` remain unchanged (`historical-integrity.txt`). Whitespace, local documentation links and scoped-file checks pass. No staging, commit, push or deployment.
+
+### Limits and next step
+
+All newly inspected translation strings/results are synthetic; no new real-provider or qualified bilingual quality evidence is claimed. Unsaved correction drafts are kept in the current editor's memory, not a new persistent draft/recovery system; browser/tab loss or reload is outside that protection. In-app navigation/discard paths are protected. Existing correction CAS uses exact source version, identity and text snapshot, not a new monotonically increasing correction revision. Invalid/uncertain submissions require deliberate review; C3 does not implement generation failure recovery or a production retry policy.
+
+Real generation remains disabled. Safe generation recovery, actual production D1 validation, real-provider/quality acceptance, guest language selection, translated PDFs, ownership/privacy/free-text safeguards, quotas/billing, operational security and physical-device/print acceptance remain launch gates. SG-P22/SG-SHARE01 and all historical evidence are preserved. Ready for independent review within C3 only; do not start the next task automatically.

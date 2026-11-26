@@ -209,5 +209,14 @@ export default Object.freeze({
   "Generation availability could not be checked. Translation remains disabled.": "Die Verfügbarkeit konnte nicht geprüft werden. Das Übersetzen bleibt deaktiviert.",
   "Send the saved text in this section to the translation provider? Your original text will not change.": "Den gespeicherten Text dieses Abschnitts an den Übersetzungsanbieter senden? Ihr Originaltext bleibt unverändert.",
   "Saved translation verified.": "Gespeicherte Übersetzung bestätigt.",
-  "Test translation saved and verified.": "Testübersetzung gespeichert und bestätigt."
+  "Test translation saved and verified.": "Testübersetzung gespeichert und bestätigt.",
+  "Edit translation": "Übersetzung bearbeiten",
+  "Save correction": "Korrektur speichern",
+  "Edit the saved translation only. Your original text stays unchanged; no AI request is made.": "Bearbeiten Sie nur die gespeicherte Übersetzung. Der Originaltext bleibt unverändert; es wird keine KI-Anfrage gesendet.",
+  "Discard your unsaved translation correction? Copy any text you want to keep before continuing.": "Ungespeicherte Übersetzungskorrektur verwerfen? Kopieren Sie zuvor den Text, den Sie behalten möchten.",
+  "Refresh saved status before editing this translation again.": "Aktualisieren Sie den gespeicherten Status, bevor Sie diese Übersetzung erneut bearbeiten.",
+  "Saving correction…": "Korrektur wird gespeichert…",
+  "Correction saved and verified. Your original text is unchanged.": "Korrektur gespeichert und geprüft. Der Originaltext bleibt unverändert.",
+  "This translation changed or could not be saved. Your correction is still here. Copy it somewhere safe, then explicitly refresh saved status to review the latest text.": "Diese Übersetzung wurde geändert oder konnte nicht gespeichert werden. Ihre Korrektur ist noch hier. Kopieren Sie sie an einen sicheren Ort und aktualisieren Sie dann ausdrücklich den gespeicherten Status, um den neuesten Text zu prüfen.",
+  "The correction could not be confirmed. Your text is still here. Copy it somewhere safe, then explicitly refresh saved status before saving again.": "Die Korrektur konnte nicht bestätigt werden. Ihr Text ist noch hier. Kopieren Sie ihn an einen sicheren Ort und aktualisieren Sie dann ausdrücklich den gespeicherten Status, bevor Sie erneut speichern."
 });

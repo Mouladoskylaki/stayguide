@@ -88,9 +88,9 @@ function translations(env){
  const provider=env.TRANSLATION_PROVIDER??createOpenAITranslationProvider({enabled:env.TRANSLATION_LIVE_ENABLED==='true',keyProvider:()=>env.OPENAI_API_KEY});
  return createTranslationService({store:createTranslationStore(env.DB),provider});
 }
-async function translationBody(request){
+async function translationBody(request,limit=4096){
  const reader=request.body?.getReader();if(!reader)return null;let text='',bytes=0;const decoder=new TextDecoder();
- try{while(true){const {done,value}=await reader.read();if(done)break;bytes+=value.length;if(bytes>4096)return null;text+=decoder.decode(value,{stream:true});}text+=decoder.decode();return JSON.parse(text);}
+ try{while(true){const {done,value}=await reader.read();if(done)break;bytes+=value.length;if(bytes>limit)return null;text+=decoder.decode(value,{stream:true});}text+=decoder.decode();return JSON.parse(text);}
  catch{return null;}finally{try{await reader.cancel();}catch{}reader.releaseLock();}
 }
 export async function handleRequest(request,env){
@@ -148,9 +148,22 @@ export async function handleRequest(request,env){
       return capability('available');
     }
     m=path.match(/^\/api\/guides\/([a-f0-9]{16})\/translations$/);
-    if(m&&(method==='POST'||method==='GET')){
+    if(m&&(method==='POST'||method==='GET'||method==='PATCH')){
       const row=await lookup(env.DB,m[1]);if(!row)return error('Not found',404);
       if(!(await checkOwner(request,row)))return error('Not authorized',401);
+      if(method==='PATCH'){
+        // 96 KiB includes two 3,200-byte fields plus their JSON-escaped previous
+        // snapshot (even worst-case control-character escaping), with a hard cap.
+        const body=await translationBody(request,98304),keys=['section','targetLanguage','fields','expected'];
+        const expected=body?.expected,fields=body?.fields,expectedKeys=['sourceVersion','translationId','translatedText'];
+        if(request.headers.get('Content-Type')?.split(';')[0].trim().toLowerCase()!=='application/json'||!body||Array.isArray(body)||Object.keys(body).length!==keys.length||Object.keys(body).some(k=>!keys.includes(k))||!Object.hasOwn(TRANSLATABLE_SECTIONS,body.section)||!isGenerationLocale(body.targetLanguage)||!expected||Array.isArray(expected)||Object.keys(expected).length!==3||Object.keys(expected).some(k=>!expectedKeys.includes(k))||!Number.isSafeInteger(expected.sourceVersion)||expected.sourceVersion<1||typeof expected.translationId!=='string'||!expected.translationId.length||expected.translationId.length>128||typeof expected.translatedText!=='string'||new TextEncoder().encode(expected.translatedText).length>40000||!fields||Array.isArray(fields)||Object.keys(fields).sort().join()!==TRANSLATABLE_SECTIONS[body.section].slice().sort().join()||!Object.values(fields).every(v=>typeof v==='string'&&new TextEncoder().encode(v).length<=3200&&!/(?:sk-[A-Za-z0-9_-]{20,}|Bearer\s|-----BEGIN.*PRIVATE KEY)/.test(v)))return error('Invalid correction request',400);
+        // A storage-only OpenAI-mode boundary: never resolve live configuration,
+        // injected generation providers, credentials or any transport for correction.
+        const store=createTranslationStore(env.DB),source=await store.source(row.id,body.section);
+        const service=createTranslationService({store,provider:{mode:'openai',enabled:false,async translate(){throw Error('Generation unavailable');}}});
+        const applied=isGenerationLocale(source?.source_language)&&await service.correct(row.id,body.section,body.targetLanguage,fields,expected);
+        return applied?json({status:'corrected'}):json({error:'The correction could not be saved. Review the latest saved translation before trying again.',code:'correction_conflict'},409);
+      }
       const service=translations(env);
       if(method==='GET')return json(await service.view(row.id,url.searchParams.get('section'),url.searchParams.get('lang')));
       const body=await translationBody(request);

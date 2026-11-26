@@ -209,5 +209,14 @@ export default Object.freeze({
   "Generation availability could not be checked. Translation remains disabled.": "No se pudo comprobar la disponibilidad. La traducción sigue desactivada.",
   "Send the saved text in this section to the translation provider? Your original text will not change.": "¿Enviar el texto guardado de esta sección al proveedor de traducción? El texto original no cambiará.",
   "Saved translation verified.": "Traducción guardada verificada.",
-  "Test translation saved and verified.": "Traducción de prueba guardada y verificada."
+  "Test translation saved and verified.": "Traducción de prueba guardada y verificada.",
+  "Edit translation": "Editar traducción",
+  "Save correction": "Guardar corrección",
+  "Edit the saved translation only. Your original text stays unchanged; no AI request is made.": "Edita solo la traducción guardada. El texto original no cambia; no se envía ninguna solicitud de IA.",
+  "Discard your unsaved translation correction? Copy any text you want to keep before continuing.": "¿Descartar la corrección sin guardar? Copia el texto que quieras conservar antes de continuar.",
+  "Refresh saved status before editing this translation again.": "Actualiza el estado guardado antes de volver a editar esta traducción.",
+  "Saving correction…": "Guardando corrección…",
+  "Correction saved and verified. Your original text is unchanged.": "Corrección guardada y verificada. El texto original no ha cambiado.",
+  "This translation changed or could not be saved. Your correction is still here. Copy it somewhere safe, then explicitly refresh saved status to review the latest text.": "Esta traducción ha cambiado o no se ha podido guardar. Tu corrección sigue aquí. Cópiala en un lugar seguro y después actualiza expresamente el estado guardado para revisar el texto más reciente.",
+  "The correction could not be confirmed. Your text is still here. Copy it somewhere safe, then explicitly refresh saved status before saving again.": "No se ha podido confirmar la corrección. Tu texto sigue aquí. Cópialo en un lugar seguro y después actualiza expresamente el estado guardado antes de volver a guardar."
 });

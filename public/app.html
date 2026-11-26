@@ -74,7 +74,14 @@
           <button type="button" id="generate-translation" class="button button-primary" hidden data-i18n="Translate saved text">Translate saved text</button>
           <p id="translation-generation-status" role="status" aria-live="polite" aria-atomic="true" tabindex="-1"></p>
           <button type="button" id="refresh-translations" class="button button-secondary" data-i18n="Refresh saved status">Refresh saved status</button>
-          <p class="translation-unavailable" data-i18n="Translation editing is not available yet.">Translation editing is not available yet.</p>
+          <button type="button" id="edit-translation" class="button button-secondary" hidden data-i18n="Edit translation">Edit translation</button>
+          <div id="translation-correction" hidden>
+            <p data-i18n="Edit the saved translation only. Your original text stays unchanged; no AI request is made.">Edit the saved translation only. Your original text stays unchanged; no AI request is made.</p>
+            <fieldset id="correction-fields"></fieldset>
+            <button type="button" id="save-correction" class="button button-primary" data-i18n="Save correction">Save correction</button>
+            <button type="button" id="cancel-correction" class="button button-secondary" data-i18n="Cancel">Cancel</button>
+          </div>
+          <p id="correction-status" role="status" aria-live="polite" aria-atomic="true" tabindex="-1"></p>
         </div>
       </details>
       <p id="editor-error" class="editor-error" role="alert" tabindex="-1" hidden></p>

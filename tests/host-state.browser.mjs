@@ -16,6 +16,7 @@ import {checkHostLocalization} from './host-i18n.browser.mjs';
 import {checkHostWorkspace} from './host-workspace.browser.mjs';
 import {checkHostTranslations} from './host-translations.browser.mjs';
 import {checkHostGeneration} from './host-generation.browser.mjs';
+import {checkHostCorrections} from './host-corrections.browser.mjs';
 
 const root=new URL('../public/',import.meta.url);
 const artifacts=process.env.SG_BROWSER_ARTIFACTS?path.resolve(process.env.SG_BROWSER_ARTIFACTS):await fs.mkdtemp(path.join(os.tmpdir(),'sg-p21-browser-'));
@@ -23,13 +24,14 @@ await fs.mkdir(artifacts,{recursive:true});
 console.log('Artifacts: '+artifacts);
 const baselineCss=execFileSync('git',['show','HEAD:public/styles.css'],{cwd:fileURLToPath(new URL('..',import.meta.url))});
 const db=createLocalDb();
-let generationRequests=0,offlineGeneration=null;
-const setOfflineGeneration=(provider,database)=>{offlineGeneration=provider?{provider,db:database}:null;};
+let generationRequests=0,correctionRequests=0,correctionFault=null,offlineGeneration=null;
+const setOfflineGeneration=(provider,database)=>{offlineGeneration=database?{provider,db:database}:null;};
 const server=http.createServer(async(req,res)=>{
   try{
     const chunks=[];for await(const chunk of req)chunks.push(chunk);
     const request=new Request(origin+req.url,{method:req.method,headers:req.headers,body:chunks.length?Buffer.concat(chunks):undefined});
     if(req.method==='POST'&&new URL(request.url).pathname.endsWith('/translations'))generationRequests++;
+    const correction=req.method==='PATCH'&&new URL(request.url).pathname.endsWith('/translations');if(correction)correctionRequests++;
     const response=await handleRequest(request,{DB:offlineGeneration?.db??db,TRANSLATION_OFFLINE_TEST:!!offlineGeneration,TRANSLATION_PROVIDER:offlineGeneration?.provider,ASSETS:{async fetch(request){
       let pathname=new URL(request.url).pathname;if(pathname==='/')pathname='/index.html';
       if(pathname==='/baseline-app.html')return new Response(baselineAppHtml,{headers:{'Content-Type':'text/html'}});
@@ -42,6 +44,7 @@ const server=http.createServer(async(req,res)=>{
         return new Response(await fs.readFile(new URL(pathname.slice(1),root)),{headers:{'Content-Type':type}});
       }catch{return new Response('Not found',{status:404});}
     }}});
+    if(correction&&correctionFault==='lose-response'){correctionFault=null;res.writeHead(response.status,{'Content-Type':'application/json','Content-Length':'1000'});res.write('{');setTimeout(()=>res.destroy(),50);return;}
     res.writeHead(response.status,Object.fromEntries(response.headers));res.end(Buffer.from(await response.arrayBuffer()));
   }catch{res.writeHead(500);res.end('Smoke server error');}
 });
@@ -99,10 +102,11 @@ async function navigate(route){
   // location can change while the previous document still reports complete.
   await waitFor(`location.href===${JSON.stringify(url)} && document.readyState==='complete' && performance.getEntriesByType('navigation')[0]?.name.split('#')[0]===${JSON.stringify(documentUrl.href)}`);
 }
-async function screenshot(name,width,height){
+async function screenshot(name,width,height,scrollSelector){
   await command('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:false});
   await evaluate("document.documentElement.style.scrollBehavior='auto';document.activeElement?.blur();scrollTo({top:0,left:0,behavior:'instant'})");
   await new Promise(resolve=>setTimeout(resolve,100));
+  if(scrollSelector)await evaluate(`document.querySelector(${JSON.stringify(scrollSelector)})?.scrollIntoView({block:'center',behavior:'instant'})`);
   assert.ok(await evaluate('document.documentElement.scrollWidth <= innerWidth'),'Page must not overflow');
   const image=await command('Page.captureScreenshot',{format:'png',captureBeyondViewport:false});
   await fs.writeFile(path.join(artifacts,name+'.png'),Buffer.from(image.result.data,'base64'));
@@ -191,7 +195,9 @@ try{
   await command('Page.bringToFront');
   await send('Browser.grantPermissions',{origin,permissions:['clipboardReadWrite','clipboardSanitizedWrite']});
   await send('Browser.setDownloadBehavior',{behavior:'allow',downloadPath:path.join(artifacts,'downloads')});
-  if(process.argv.includes('--generation-only')){
+  if(process.argv.includes('--corrections-only')){
+    await checkHostCorrections({db:createLocalDb(),evaluate,command,navigate,waitFor,screenshot,setDialogAcceptance:value=>{acceptDialog=value;},setOfflineGeneration,generationCount:()=>generationRequests,correctionCount:()=>correctionRequests,setCorrectionFault:value=>{correctionFault=value;}});
+  }else if(process.argv.includes('--generation-only')){
     await checkHostGeneration({db:createLocalDb(),evaluate,command,navigate,waitFor,screenshot,setDialogAcceptance:value=>{acceptDialog=value;},setOfflineGeneration,generationCount:()=>generationRequests});
   }else if(process.argv.includes('--translations-only')){
     await checkHostTranslations({db,evaluate,command,navigate,waitFor,screenshot,setDialogAcceptance:value=>{acceptDialog=value;},generationCount:()=>generationRequests});
@@ -473,6 +479,7 @@ try{
   await checkHostLocalization({evaluate,command,navigate,waitFor,screenshot});
   await checkHostTranslations({db,evaluate,command,navigate,waitFor,screenshot,setDialogAcceptance:value=>{acceptDialog=value;},generationCount:()=>generationRequests});
   await checkHostGeneration({db:createLocalDb(),evaluate,command,navigate,waitFor,screenshot,setDialogAcceptance:value=>{acceptDialog=value;},setOfflineGeneration,generationCount:()=>generationRequests});
+    await checkHostCorrections({db:createLocalDb(),evaluate,command,navigate,waitFor,screenshot,setDialogAcceptance:value=>{acceptDialog=value;},setOfflineGeneration,generationCount:()=>generationRequests,correctionCount:()=>correctionRequests,setCorrectionFault:value=>{correctionFault=value;}});
   console.log('Screenshots: '+artifacts);
   }
 }finally{
